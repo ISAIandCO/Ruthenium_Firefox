@@ -418,27 +418,59 @@ def patch_fenix_release_strings(source: str) -> str:
     )
 
 
-RFIREFOX_R_PATH = (
-    "M22,62h10.8c5.6,0 9.2,3.2 9.2,8c0,4 -2.4,6.8 -6,8l6.8,8h-6.4"
-    "l-6,-7.2h-2.8V86H22zM27.6,66.8V74h4.8c2.4,0 4,-1.2 4,-3.6"
-    "s-1.6,-3.6 -4,-3.6z"
+RFIREFOX_BADGE_DISC_PATH = (
+    "M28.5,62.5a15,15 0,1 0,0 30a15,15 0,1 0,0 -30z"
 )
+RFIREFOX_BADGE_SHADOW_PATH = (
+    "M28.5,63.3a15,15 0,1 0,0 30a15,15 0,1 0,0 -30z"
+)
+RFIREFOX_R_STEM_PATH = "M19.5,68.5h3.15v18.9h-3.15z"
+RFIREFOX_R_BOWL_PATH = (
+    "M24,68.5h4.5c4.95,0 8.1,2.925 8.1,7.65"
+    "c0,3.15 -1.575,5.4 -4.05,6.3l4.95,4.95h-4.95l-4.95,-5.4v-3.6h0.9"
+    "c2.7,0 4.05,-0.9 4.05,-2.475s-1.35,-2.7 -4.05,-2.7H24z"
+)
+RFIREFOX_R_PATHS = (RFIREFOX_R_STEM_PATH, RFIREFOX_R_BOWL_PATH)
 
 RFIREFOX_ADAPTIVE_BADGE = f"""  <!-- RFirefox launcher badge. Keep the upstream Firefox artwork unchanged. -->
   <path
-      android:pathData="{RFIREFOX_R_PATH}"
+      android:pathData="{RFIREFOX_BADGE_SHADOW_PATH}"
+      android:fillColor="#66100629" />
+  <path
+      android:pathData="{RFIREFOX_BADGE_DISC_PATH}"
+      android:fillColor="#F21B113F"
+      android:strokeColor="#FF7567F8"
+      android:strokeWidth="1.2" />
+  <path
+      android:pathData="M17,75c2.4,-6.8 8.4,-10.6 14.8,-10.6"
+      android:fillColor="#00000000"
+      android:strokeColor="#99BBB4FF"
+      android:strokeWidth="0.8"
+      android:strokeLineCap="round" />
+  <path
+      android:pathData="{RFIREFOX_R_STEM_PATH}"
       android:fillColor="#FFFFFFFF"
-      android:fillType="evenOdd"
-      android:strokeColor="#CC171D33"
-      android:strokeWidth="1.2"
-      android:strokeLineJoin="round" />
+      android:fillType="nonZero" />
+  <path
+      android:pathData="{RFIREFOX_R_BOWL_PATH}"
+      android:fillColor="#FFFFFFFF"
+      android:fillType="nonZero" />
 """
 
 RFIREFOX_MONOCHROME_BADGE = f"""  <!-- RFirefox launcher badge. -->
   <path
-      android:pathData="{RFIREFOX_R_PATH}"
+      android:pathData="{RFIREFOX_BADGE_DISC_PATH}"
+      android:fillColor="#00000000"
+      android:strokeColor="#20123A"
+      android:strokeWidth="1.8" />
+  <path
+      android:pathData="{RFIREFOX_R_STEM_PATH}"
       android:fillColor="#20123A"
-      android:fillType="evenOdd" />
+      android:fillType="nonZero" />
+  <path
+      android:pathData="{RFIREFOX_R_BOWL_PATH}"
+      android:fillColor="#20123A"
+      android:fillType="nonZero" />
 """
 
 
