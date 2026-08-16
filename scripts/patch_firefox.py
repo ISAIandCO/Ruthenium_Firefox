@@ -62,6 +62,22 @@ FENIX_LEGACY_ICONS = tuple(
     )
     for density in ICON_DENSITIES
 )
+FENIX_ADAPTIVE_ICONS = (
+    (
+        ICON_SOURCE_DIR / "rfirefox-adaptive-foreground.webp",
+        Path(
+            "mobile/android/fenix/app/src/main/res/drawable-xxxhdpi/"
+            "rfirefox_launcher_foreground.webp"
+        ),
+    ),
+    (
+        ICON_SOURCE_DIR / "rfirefox-adaptive-monochrome.webp",
+        Path(
+            "mobile/android/fenix/app/src/main/res/drawable-xxxhdpi/"
+            "rfirefox_launcher_monochrome.webp"
+        ),
+    ),
+)
 
 TEXT_TARGETS = (
     CERT_VERIFIER_CPP,
@@ -418,88 +434,43 @@ def patch_fenix_release_strings(source: str) -> str:
     )
 
 
-RFIREFOX_BADGE_DISC_PATH = (
-    "M28.5,62.5a15,15 0,1 0,0 30a15,15 0,1 0,0 -30z"
-)
-RFIREFOX_BADGE_SHADOW_PATH = (
-    "M28.5,63.3a15,15 0,1 0,0 30a15,15 0,1 0,0 -30z"
-)
-RFIREFOX_R_STEM_PATH = "M19.5,68.5h3.15v18.9h-3.15z"
-RFIREFOX_R_BOWL_PATH = (
-    "M24,68.5h4.5c4.95,0 8.1,2.925 8.1,7.65"
-    "c0,3.15 -1.575,5.4 -4.05,6.3l4.95,4.95h-4.95l-4.95,-5.4v-3.6h0.9"
-    "c2.7,0 4.05,-0.9 4.05,-2.475s-1.35,-2.7 -4.05,-2.7H24z"
-)
-RFIREFOX_R_PATHS = (RFIREFOX_R_STEM_PATH, RFIREFOX_R_BOWL_PATH)
-
-RFIREFOX_ADAPTIVE_BADGE = f"""  <!-- RFirefox launcher badge. Keep the upstream Firefox artwork unchanged. -->
-  <path
-      android:pathData="{RFIREFOX_BADGE_SHADOW_PATH}"
-      android:fillColor="#66100629" />
-  <path
-      android:pathData="{RFIREFOX_BADGE_DISC_PATH}"
-      android:fillColor="#F21B113F"
-      android:strokeColor="#FF7567F8"
-      android:strokeWidth="1.2" />
-  <path
-      android:pathData="M17,75c2.4,-6.8 8.4,-10.6 14.8,-10.6"
-      android:fillColor="#00000000"
-      android:strokeColor="#99BBB4FF"
-      android:strokeWidth="0.8"
-      android:strokeLineCap="round" />
-  <path
-      android:pathData="{RFIREFOX_R_STEM_PATH}"
-      android:fillColor="#FFFFFFFF"
-      android:fillType="nonZero" />
-  <path
-      android:pathData="{RFIREFOX_R_BOWL_PATH}"
-      android:fillColor="#FFFFFFFF"
-      android:fillType="nonZero" />
+RFIREFOX_ADAPTIVE_FOREGROUND = """<?xml version="1.0" encoding="utf-8"?>
+<!-- RFirefox adaptive fox-R foreground. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/rfirefox_launcher_foreground"
+    android:antialias="true"
+    android:dither="true"
+    android:filter="true"
+    android:gravity="fill" />
 """
 
-RFIREFOX_MONOCHROME_BADGE = f"""  <!-- RFirefox launcher badge. -->
-  <path
-      android:pathData="{RFIREFOX_BADGE_DISC_PATH}"
-      android:fillColor="#00000000"
-      android:strokeColor="#20123A"
-      android:strokeWidth="1.8" />
-  <path
-      android:pathData="{RFIREFOX_R_STEM_PATH}"
-      android:fillColor="#20123A"
-      android:fillType="nonZero" />
-  <path
-      android:pathData="{RFIREFOX_R_BOWL_PATH}"
-      android:fillColor="#20123A"
-      android:fillType="nonZero" />
+RFIREFOX_ADAPTIVE_MONOCHROME = """<?xml version="1.0" encoding="utf-8"?>
+<!-- RFirefox adaptive fox-R monochrome layer. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/rfirefox_launcher_monochrome"
+    android:antialias="true"
+    android:dither="true"
+    android:filter="true"
+    android:gravity="fill" />
 """
 
 
 def patch_fenix_launcher_foreground(source: str) -> str:
-    if "<!-- RFirefox launcher badge." in source:
+    if source == RFIREFOX_ADAPTIVE_FOREGROUND:
         return source
     required = ('<vector xmlns:android=', 'android:viewportWidth="108"', '<path')
     if not all(anchor in source for anchor in required):
         raise ValueError("Fenix launcher foreground has an unexpected format")
-    return replace_once(
-        source,
-        "</vector>\n",
-        RFIREFOX_ADAPTIVE_BADGE + "</vector>\n",
-        "Fenix launcher R badge",
-    )
+    return RFIREFOX_ADAPTIVE_FOREGROUND
 
 
 def patch_fenix_launcher_monochrome(source: str) -> str:
-    if "<!-- RFirefox launcher badge." in source:
+    if source == RFIREFOX_ADAPTIVE_MONOCHROME:
         return source
     required = ('<vector xmlns:android=', 'android:viewportWidth="108"', '<path')
     if not all(anchor in source for anchor in required):
         raise ValueError("Fenix monochrome launcher has an unexpected format")
-    return replace_once(
-        source,
-        "</vector>\n",
-        RFIREFOX_MONOCHROME_BADGE + "</vector>\n",
-        "Fenix monochrome launcher R badge",
-    )
+    return RFIREFOX_ADAPTIVE_MONOCHROME
 
 
 TRANSFORMS: dict[Path, Callable[[str], str]] = {
@@ -545,6 +516,17 @@ def copy_branding_icons(source_root: Path) -> list[Path]:
         if destination.read_bytes() != asset_path.read_bytes():
             shutil.copyfile(asset_path, destination)
             changed.append(relative_path)
+    for asset_path, relative_path in FENIX_ADAPTIVE_ICONS:
+        if not asset_path.is_file():
+            raise ValueError(f"launcher icon asset is missing: {asset_path}")
+        destination = source_root / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if (
+            not destination.is_file()
+            or destination.read_bytes() != asset_path.read_bytes()
+        ):
+            shutil.copyfile(asset_path, destination)
+            changed.append(relative_path)
     return changed
 
 
@@ -584,6 +566,7 @@ def main() -> None:
         for path in (
             *TEXT_TARGETS,
             *(path for _, path in FENIX_LEGACY_ICONS),
+            *(path for _, path in FENIX_ADAPTIVE_ICONS),
             GENERATED_HEADER,
         ):
             print(path)

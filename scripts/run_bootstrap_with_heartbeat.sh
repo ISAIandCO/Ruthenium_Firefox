@@ -102,7 +102,10 @@ free -h
 ) &
 heartbeat_pid="$!"
 
-unset ANDROID_HOME ANDROID_SDK_ROOT
+# MOZCONFIG is exported for the later build steps, but Firefox bootstrap must
+# not see a path that does not exist yet. Let bootstrap create its conventional
+# $PWD/mozconfig file, which is the path exported by the workflow.
+unset MOZCONFIG ANDROID_HOME ANDROID_SDK_ROOT
 set +e
 PYTHONUNBUFFERED=1 stdbuf -oL -eL \
   ./mach --no-interactive bootstrap \
