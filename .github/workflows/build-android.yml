@@ -142,10 +142,10 @@ jobs:
 
       - name: Bootstrap GeckoView and Fenix toolchains
         working-directory: ${{ runner.temp }}/firefox-source
+        env:
+          RFIREFOX_BOOTSTRAP_HEARTBEAT_SECONDS: "60"
         run: |
-          unset ANDROID_HOME ANDROID_SDK_ROOT
-          ./mach --no-interactive bootstrap \
-            --application-choice="GeckoView/Firefox for Android"
+          bash "$GITHUB_WORKSPACE/scripts/run_bootstrap_with_heartbeat.sh"
           test -f "$MOZCONFIG"
           {
             echo "mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/$MOZ_OBJDIR_NAME"
@@ -154,6 +154,15 @@ jobs:
             echo "ac_add_options --disable-debug-symbols"
             echo "ac_add_options --enable-optimize"
           } >> "$MOZCONFIG"
+
+      - name: Upload bootstrap diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-diagnostics-${{ needs.resolve.outputs.version }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/rfirefox-bootstrap/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Build patched GeckoView
         working-directory: ${{ runner.temp }}/firefox-source

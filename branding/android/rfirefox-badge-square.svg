@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="panel" x1="12" y1="128" x2="66" y2="184" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#30206a"/>
+      <stop offset="0.55" stop-color="#1d123f"/>
+      <stop offset="1" stop-color="#100a29"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="12" y1="126" x2="68" y2="184" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9e91ff"/>
+      <stop offset="0.45" stop-color="#6558ec"/>
+      <stop offset="1" stop-color="#3225a8"/>
+    </linearGradient>
+    <linearGradient id="monogram" x1="22" y1="137" x2="57" y2="176" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.55" stop-color="#f3f1ff"/>
+      <stop offset="1" stop-color="#c9c5ee"/>
+    </linearGradient>
+  </defs>
+  <rect x="17" y="123.5" width="52" height="52" rx="16" fill="#060414" opacity="0.62"/>
+  <rect x="17" y="122" width="52" height="52" rx="16" fill="url(#panel)" stroke="url(#rim)" stroke-width="3"/>
+  <path d="M25 130C33 124 47 124 57 132" fill="none" stroke="#b9b1ff" stroke-opacity="0.56" stroke-width="1.5" stroke-linecap="round"/>
+  <g fill="#090619" opacity="0.72" transform="translate(26.8 130.8) scale(.82)">
+    <path d="M0 0H7V42H0Z"/>
+    <path d="M10 0H20C31 0 38 6.5 38 17C38 24 34.5 29 29 31L40 42H29L18 30V22H20C26 22 29 20 29 16.5C29 13 26 10.5 20 10.5H10Z"/>
+  </g>
+  <g fill="url(#monogram)" transform="translate(26 130) scale(.82)">
+    <path d="M0 0H7V42H0Z"/>
+    <path d="M10 0H20C31 0 38 6.5 38 17C38 24 34.5 29 29 31L40 42H29L18 30V22H20C26 22 29 20 29 16.5C29 13 26 10.5 20 10.5H10Z"/>
+  </g>
+</svg>

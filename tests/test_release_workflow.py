@@ -6,6 +6,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPOSITORY_ROOT / ".github/workflows/build-android.yml"
+BOOTSTRAP_SCRIPT = REPOSITORY_ROOT / "scripts/run_bootstrap_with_heartbeat.sh"
 
 
 class ReleaseWorkflowPolicyTest(unittest.TestCase):
@@ -33,6 +34,20 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
     def test_existing_firefox_release_skips_the_expensive_build(self) -> None:
         self.assertIn("release_exists:", self.workflow)
         self.assertIn("needs.resolve.outputs.release_exists != 'true'", self.workflow)
+
+    def test_bootstrap_has_live_diagnostics_without_an_extra_timeout(self) -> None:
+        bootstrap_script = BOOTSTRAP_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertNotIn("timeout-minutes: 100", self.workflow)
+        self.assertNotIn("RFIREFOX_BOOTSTRAP_TIMEOUT", self.workflow)
+        self.assertIn("run_bootstrap_with_heartbeat.sh", self.workflow)
+        self.assertIn("Upload bootstrap diagnostics", self.workflow)
+        self.assertIn("if: ${{ always() }}", self.workflow)
+        self.assertNotIn("timeout --", bootstrap_script)
+        self.assertIn("PYTHONUNBUFFERED=1 stdbuf", bootstrap_script)
+        self.assertIn("Firefox bootstrap heartbeat", bootstrap_script)
+        self.assertIn("bootstrap.log", bootstrap_script)
+        self.assertIn("summary.txt", bootstrap_script)
 
 
 if __name__ == "__main__":

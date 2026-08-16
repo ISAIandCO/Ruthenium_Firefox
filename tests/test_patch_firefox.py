@@ -89,9 +89,12 @@ class CertificatePatchTest(unittest.TestCase):
         patched = patch_firefox.patch_fenix_launcher_foreground(upstream)
         self.assertIn('android:pathData="M0,0"', patched)
         self.assertIn("RFirefox launcher badge", patched)
-        self.assertIn(patch_firefox.RFIREFOX_R_PATH, patched)
+        self.assertIn(patch_firefox.RFIREFOX_BADGE_DISC_PATH, patched)
+        for r_path in patch_firefox.RFIREFOX_R_PATHS:
+            self.assertIn(r_path, patched)
         self.assertIn("#FFFFFFFF", patched)
-        self.assertIn("#CC171D33", patched)
+        self.assertIn("#FF7567F8", patched)
+        self.assertNotIn("android:translate", patched)
         ElementTree.fromstring(patched)
         self.assertEqual(
             patched,
@@ -100,7 +103,9 @@ class CertificatePatchTest(unittest.TestCase):
 
         monochrome = patch_firefox.patch_fenix_launcher_monochrome(upstream)
         self.assertIn('android:pathData="M0,0"', monochrome)
-        self.assertIn(patch_firefox.RFIREFOX_R_PATH, monochrome)
+        self.assertIn(patch_firefox.RFIREFOX_BADGE_DISC_PATH, monochrome)
+        for r_path in patch_firefox.RFIREFOX_R_PATHS:
+            self.assertIn(r_path, monochrome)
         self.assertIn("#20123A", monochrome)
         ElementTree.fromstring(monochrome)
         self.assertEqual(
@@ -113,6 +118,17 @@ class CertificatePatchTest(unittest.TestCase):
             data = Path(asset_path).read_bytes()
             self.assertTrue(data.startswith(b"RIFF"), asset_path)
             self.assertEqual(data[8:12], b"WEBP", asset_path)
+
+        for overlay_name in (
+            "rfirefox-badge-square.svg",
+            "rfirefox-badge-round.svg",
+        ):
+            overlay = (patch_firefox.ICON_SOURCE_DIR / overlay_name).read_text(
+                encoding="utf-8"
+            )
+            self.assertNotIn("<text", overlay)
+            self.assertNotIn("font-family", overlay)
+            self.assertIn("<path", overlay)
 
     def test_legacy_launcher_assets_are_copied_idempotently(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
