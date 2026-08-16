@@ -1,0 +1,32 @@
+name: Validate Ruthenium patches
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run unit tests
+        run: python3 -m unittest discover -v
+
+      - name: Resolve current Firefox Android release
+        id: source
+        run: python3 scripts/resolve_firefox_source.py --format github-output >> "$GITHUB_OUTPUT"
+
+      - name: Check patch compatibility with current stable source
+        env:
+          SOURCE_REPOSITORY: ${{ steps.source.outputs.repository }}
+          SOURCE_TAG: ${{ steps.source.outputs.tag }}
+        run: |
+          python3 scripts/patch_firefox.py \
+            --check-remote "$SOURCE_REPOSITORY/raw-file/$SOURCE_TAG"

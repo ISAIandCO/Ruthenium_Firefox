@@ -1,0 +1,7 @@
+{
+  "alias": "androiddebugkey",
+  "certificate_sha256": "d7a19050129bbb6e7af6f29dc899a123757ca226ea0ee3c7395c43527592035f",
+  "key_password": "android",
+  "keystore": "rfirefox-debug.keystore",
+  "store_password": "android"
+}

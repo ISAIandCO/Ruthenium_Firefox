@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = REPOSITORY_ROOT / ".github/workflows/build-android.yml"
+
+
+class ReleaseWorkflowPolicyTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    def test_full_build_is_not_triggered_by_repository_changes(self) -> None:
+        trigger_section = self.workflow.split("permissions:", 1)[0]
+        self.assertIn("workflow_dispatch:", trigger_section)
+        self.assertIn("schedule:", trigger_section)
+        self.assertNotIn("push:", trigger_section)
+        self.assertNotIn("pull_request:", trigger_section)
+
+    def test_release_uses_committed_debug_key_and_debug_version_suffix(self) -> None:
+        self.assertNotIn("-PdisableDebugSigning", self.workflow)
+        self.assertNotIn('"$apksigner" sign', self.workflow)
+        self.assertIn('"$apksigner" verify', self.workflow)
+        self.assertIn("signing/rfirefox-debug.keystore", self.workflow)
+        self.assertIn("d7a19050129bbb6e7af6f29dc899a123757ca226ea0ee3c7395c43527592035f", self.workflow)
+        self.assertIn('release_tag="${FIREFOX_VERSION}_debug"', self.workflow)
+        self.assertIn('--title "$RELEASE_TAG"', self.workflow)
+        self.assertIn('gh release create "$RELEASE_TAG"', self.workflow)
+
+    def test_existing_firefox_release_skips_the_expensive_build(self) -> None:
+        self.assertIn("release_exists:", self.workflow)
+        self.assertIn("needs.resolve.outputs.release_exists != 'true'", self.workflow)
+
+
+if __name__ == "__main__":
+    unittest.main()
