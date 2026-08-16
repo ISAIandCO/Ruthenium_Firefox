@@ -168,11 +168,24 @@ jobs:
         working-directory: ${{ runner.temp }}/firefox-source
         run: ./mach build
 
+      - name: Stop GeckoView Gradle daemons before Fenix packaging
+        working-directory: ${{ runner.temp }}/firefox-source
+        run: |
+          ./gradlew --stop
+          ./gradlew --status || true
+          free -h
+
       - name: Assemble Fenix release APK with the debug key
         working-directory: ${{ runner.temp }}/firefox-source
         # The RFirefox product patch points signingConfigs.debug to the
         # RFIREFOX_DEBUG_KEYSTORE file committed in this repository.
-        run: ./mach gradle fenix:assembleRelease
+        # A full mach build has just refreshed and staged Gecko. Tell Mozilla's
+        # Gradle plugin not to start a nested `mach build faster`, which would
+        # keep a second 7 GiB Gradle daemon alive during the memory-heavy R8
+        # and resource-shrinking tasks on a 16 GiB hosted runner.
+        env:
+          GRADLE_INVOKED_WITHIN_MACH_BUILD: "1"
+        run: ./mach gradle --no-daemon --max-workers=2 fenix:assembleRelease
 
       - name: Collect and verify debug-signed APKs
         env:
