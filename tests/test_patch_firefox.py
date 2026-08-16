@@ -34,6 +34,84 @@ class CertificatePatchTest(unittest.TestCase):
         self.assertIn("kRutheniumRussianRootDER", header)
         self.assertIn("kRutheniumNameConstraintsDER", header)
 
+    def test_trust_domain_name_constraints_are_const_correct(self) -> None:
+        header = """  NSSCertDBTrustDomain(
+      /*out*/ nsTArray<nsTArray<uint8_t>>& builtChain,
+      /*optional*/ PinningTelemetryInfo* pinningTelemetryInfo = nullptr,
+      /*optional*/ const char* hostname = nullptr);
+
+  Result CheckCandidates(IssuerChecker& checker,
+                         nsTArray<IssuerCandidateWithSource>& candidates,
+                         mozilla::pkix::Input* nameConstraintsInputPtr,
+                         bool& keepGoing);
+
+  const nsTArray<mozilla::pkix::Input>&
+      mThirdPartyIntermediateInputs;                              // non-owning
+  const Maybe<nsTArray<nsTArray<uint8_t>>>& mExtraCertificates;
+"""
+        patched_header = patch_firefox.patch_trust_domain_h(header)
+        self.assertIn(
+            "const mozilla::pkix::Input* nameConstraintsInputPtr",
+            patched_header,
+        )
+        self.assertNotIn(
+            "\n                         mozilla::pkix::Input* "
+            "nameConstraintsInputPtr",
+            patched_header,
+        )
+        self.assertEqual(
+            patched_header,
+            patch_firefox.patch_trust_domain_h(patched_header),
+        )
+
+        implementation = """NSSCertDBTrustDomain::NSSCertDBTrustDomain(
+    /*out*/ nsTArray<nsTArray<uint8_t>>& builtChain,
+    /*optional*/ PinningTelemetryInfo* pinningTelemetryInfo,
+    /*optional*/ const char* hostname)
+    : mDummy(dummy),
+      mThirdPartyIntermediateInputs(thirdPartyIntermediateInputs),
+      mExtraCertificates(extraCertificates),
+      mBuiltChain(builtChain) {}
+
+Result NSSCertDBTrustDomain::CheckCandidates(
+    IssuerChecker& checker, nsTArray<IssuerCandidateWithSource>& candidates,
+    Input* nameConstraintsInputPtr, bool& keepGoing) {
+  return checker.Check(candidates[0].mDER, nameConstraintsInputPtr, keepGoing);
+}
+
+Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
+                                        IssuerChecker& checker, Time) {
+  Input* nameConstraintsInputPtr = nullptr;
+  if (false) {
+    return Success;
+  } else if (PR_GetError() != SEC_ERROR_EXTENSION_NOT_FOUND) {
+    return Result::FATAL_ERROR_LIBRARY_FAILURE;
+  }
+
+  // First try all relevant certificates known to Gecko
+  return Success;
+}
+"""
+        patched_implementation = patch_firefox.patch_trust_domain_cpp(
+            implementation
+        )
+        self.assertEqual(
+            patched_implementation.count(
+                "const Input* nameConstraintsInputPtr"
+            ),
+            2,
+        )
+        self.assertNotIn(
+            "\n    Input* nameConstraintsInputPtr", patched_implementation
+        )
+        self.assertNotIn(
+            "\n  Input* nameConstraintsInputPtr", patched_implementation
+        )
+        self.assertEqual(
+            patched_implementation,
+            patch_firefox.patch_trust_domain_cpp(patched_implementation),
+        )
+
     def test_product_patches_are_idempotent(self) -> None:
         strings = """<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name" translatable="false">Firefox Fenix</string>

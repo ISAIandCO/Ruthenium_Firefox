@@ -292,6 +292,21 @@ def patch_trust_domain_h(source: str) -> str:
         source, old_signature, new_signature, "TrustDomain constructor declaration"
     )
 
+    old_check_candidates = """  Result CheckCandidates(IssuerChecker& checker,
+                         nsTArray<IssuerCandidateWithSource>& candidates,
+                         mozilla::pkix::Input* nameConstraintsInputPtr,
+                         bool& keepGoing);"""
+    new_check_candidates = """  Result CheckCandidates(IssuerChecker& checker,
+                         nsTArray<IssuerCandidateWithSource>& candidates,
+                         const mozilla::pkix::Input* nameConstraintsInputPtr,
+                         bool& keepGoing);"""
+    source = replace_once(
+        source,
+        old_check_candidates,
+        new_check_candidates,
+        "CheckCandidates name constraints constness",
+    )
+
     old_members = """  const nsTArray<mozilla::pkix::Input>&
       mThirdPartyIntermediateInputs;                              // non-owning
   const Maybe<nsTArray<nsTArray<uint8_t>>>& mExtraCertificates;"""
@@ -326,6 +341,19 @@ def patch_trust_domain_cpp(source: str) -> str:
       mAdditionalNameConstraints(additionalNameConstraints),
       mExtraCertificates(extraCertificates),""",
         "TrustDomain constructor initialization",
+    )
+
+    old_check_candidates = """Result NSSCertDBTrustDomain::CheckCandidates(
+    IssuerChecker& checker, nsTArray<IssuerCandidateWithSource>& candidates,
+    Input* nameConstraintsInputPtr, bool& keepGoing) {"""
+    new_check_candidates = """Result NSSCertDBTrustDomain::CheckCandidates(
+    IssuerChecker& checker, nsTArray<IssuerCandidateWithSource>& candidates,
+    const Input* nameConstraintsInputPtr, bool& keepGoing) {"""
+    source = replace_once(
+        source,
+        old_check_candidates,
+        new_check_candidates,
+        "CheckCandidates definition name constraints constness",
     )
 
     old_pointer = "  Input* nameConstraintsInputPtr = nullptr;"
