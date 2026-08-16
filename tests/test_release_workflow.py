@@ -66,6 +66,17 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
             bootstrap_script.index("./mach --no-interactive bootstrap"),
         )
 
+    def test_fenix_packaging_uses_one_bounded_gradle_process(self) -> None:
+        self.assertIn(
+            "Stop GeckoView Gradle daemons before Fenix packaging", self.workflow
+        )
+        self.assertIn("./gradlew --stop", self.workflow)
+        self.assertIn('GRADLE_INVOKED_WITHIN_MACH_BUILD: "1"', self.workflow)
+        self.assertIn(
+            "./mach gradle --no-daemon --max-workers=2 fenix:assembleRelease",
+            self.workflow,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

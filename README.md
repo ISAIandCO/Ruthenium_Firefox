@@ -206,6 +206,13 @@ heartbeat, использование диска и памяти, а также 
 него добавляются release-настройки. Это не даёт `mach` остановиться на проверке
 ещё не существующего файла до установки toolchain.
 
+После полного `mach build` workflow останавливает оставшиеся Gradle daemon-процессы.
+При сборке release APK выставляется штатный флаг Mozilla
+`GRADLE_INVOKED_WITHIN_MACH_BUILD=1`: поскольку Gecko уже полностью собран и
+разложен в object directory, это исключает вложенный повторный `mach build faster`.
+Fenix запускается с `--no-daemon --max-workers=2`, чтобы R8 и сжатие ресурсов не
+соседствовали со вторым Gradle heap на 16-ГБ GitHub-hosted runner.
+
 ## Ограничения и риски
 
 - Это не официальный Firefox и не результат аудита Mozilla.
