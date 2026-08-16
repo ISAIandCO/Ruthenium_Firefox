@@ -1,28 +1,32 @@
 # RFirefox Android branding
 
-RFirefox preserves the standard Firefox release launcher artwork and adds a
-compact lower-left identity medallion. The split geometric `R`, inset panel,
-violet rim and highlight are designed as one mark rather than a font glyph
-placed over the Firefox artwork.
+The RFirefox mark is a custom fox whose body and tail form the outline of an
+`R`. Orange, gold and magenta surfaces retain the visual language of Firefox,
+while the violet centre and dark ink background keep the result distinct and
+legible at launcher size. The letter is part of the illustration rather than a
+font glyph or a badge placed over another logo.
 
-The WebP files under `android/` are based on the corresponding standard and
-round Firefox assets from Mozilla tag `FIREFOX-ANDROID_153_0_4_RELEASE`. They
-cover every density shipped by the Fenix release source set:
+The WebP files under `android/` cover every launcher form used by the Fenix
+release source set:
 
-- `rfirefox-<density>.webp` replaces `ic_launcher.webp`;
-- `rfirefox-round-<density>.webp` replaces `ic_launcher_round.webp`.
+- `rfirefox-<density>.webp` replaces the square legacy `ic_launcher.webp`;
+- `rfirefox-round-<density>.webp` replaces the round legacy
+  `ic_launcher_round.webp`;
+- `rfirefox-adaptive-foreground.webp` is the transparent colour foreground for
+  adaptive icons;
+- `rfirefox-adaptive-monochrome.webp` is its alpha-preserving silhouette for
+  Android themed icons.
 
-The editable overlay masters are `rfirefox-badge-square.svg` and
-`rfirefox-badge-round.svg`. The normal icon uses an inset rounded-square
-medallion; the round icon uses a smaller circular version placed within its safe
-area. Neither changes the original launcher silhouette. Both use a two-part
-custom vector monogram which remains legible at the 48 px mdpi size.
+The legacy outputs retain the upstream pixel dimensions: 48, 76, 96, 144 and
+192 px for mdpi through xxxhdpi. Lossless 512 px source renders are stored as
+`rfirefox-square-master.webp` and `rfirefox-round-master.webp`.
 
-Adaptive and themed icons are not rasterized here. `scripts/patch_firefox.py`
-keeps Mozilla's foreground vectors intact and appends an equivalent disc and
-split monogram to the release/main foreground. The monochrome VectorDrawable
-uses a ring plus the same split monogram, so the identity remains visible when
-Android applies an adaptive mask or themed-icon tint.
+The adaptive assets are 432 px in `drawable-xxxhdpi`, which maps to the 108 dp
+launcher canvas. Their transparent padding keeps the fox-R inside the adaptive
+safe zone while Android supplies the existing release background and applies
+the user's circle, squircle or other launcher mask. `scripts/patch_firefox.py`
+installs small bitmap-drawable wrappers for both the colour and monochrome
+layers; the latter is tinted by Android instead of baking in a theme colour.
 
 Firefox and its logo are trademarks of Mozilla Foundation. See `NOTICE.md` and
 Mozilla's trademark policy before distributing the modified assets.

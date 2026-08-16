@@ -82,55 +82,79 @@ class CertificatePatchTest(unittest.TestCase):
         self.assertIn('applicationId "app.ruthenium"', patched)
         self.assertEqual(patched, patch_firefox.patch_fenix_gradle(patched))
 
-    def test_launcher_keeps_upstream_artwork_and_adds_r_badge(self) -> None:
+    def test_launcher_uses_integrated_fox_r_adaptive_assets(self) -> None:
         upstream = """<vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:viewportWidth="108"><path android:pathData="M0,0" /></vector>
 """
         patched = patch_firefox.patch_fenix_launcher_foreground(upstream)
-        self.assertIn('android:pathData="M0,0"', patched)
-        self.assertIn("RFirefox launcher badge", patched)
-        self.assertIn(patch_firefox.RFIREFOX_BADGE_DISC_PATH, patched)
-        for r_path in patch_firefox.RFIREFOX_R_PATHS:
-            self.assertIn(r_path, patched)
-        self.assertIn("#FFFFFFFF", patched)
-        self.assertIn("#FF7567F8", patched)
-        self.assertNotIn("android:translate", patched)
-        ElementTree.fromstring(patched)
+        self.assertEqual(patched, patch_firefox.RFIREFOX_ADAPTIVE_FOREGROUND)
+        self.assertNotIn('android:pathData="M0,0"', patched)
+        self.assertIn("RFirefox adaptive fox-R foreground", patched)
+        self.assertIn(
+            'android:src="@drawable/rfirefox_launcher_foreground"', patched
+        )
+        self.assertNotIn("<path", patched)
+        foreground_root = ElementTree.fromstring(patched)
+        self.assertEqual(foreground_root.tag, "bitmap")
+        self.assertEqual(
+            foreground_root.attrib[
+                "{http://schemas.android.com/apk/res/android}src"
+            ],
+            "@drawable/rfirefox_launcher_foreground",
+        )
+        self.assertEqual(
+            foreground_root.attrib[
+                "{http://schemas.android.com/apk/res/android}gravity"
+            ],
+            "fill",
+        )
         self.assertEqual(
             patched,
             patch_firefox.patch_fenix_launcher_foreground(patched),
         )
 
         monochrome = patch_firefox.patch_fenix_launcher_monochrome(upstream)
-        self.assertIn('android:pathData="M0,0"', monochrome)
-        self.assertIn(patch_firefox.RFIREFOX_BADGE_DISC_PATH, monochrome)
-        for r_path in patch_firefox.RFIREFOX_R_PATHS:
-            self.assertIn(r_path, monochrome)
-        self.assertIn("#20123A", monochrome)
-        ElementTree.fromstring(monochrome)
+        self.assertEqual(monochrome, patch_firefox.RFIREFOX_ADAPTIVE_MONOCHROME)
+        self.assertNotIn('android:pathData="M0,0"', monochrome)
+        self.assertIn("RFirefox adaptive fox-R monochrome layer", monochrome)
+        self.assertIn(
+            'android:src="@drawable/rfirefox_launcher_monochrome"', monochrome
+        )
+        self.assertNotIn("<path", monochrome)
+        monochrome_root = ElementTree.fromstring(monochrome)
+        self.assertEqual(monochrome_root.tag, "bitmap")
+        self.assertEqual(
+            monochrome_root.attrib[
+                "{http://schemas.android.com/apk/res/android}src"
+            ],
+            "@drawable/rfirefox_launcher_monochrome",
+        )
         self.assertEqual(
             monochrome,
             patch_firefox.patch_fenix_launcher_monochrome(monochrome),
         )
 
         self.assertEqual(len(patch_firefox.FENIX_LEGACY_ICONS), 10)
-        for asset_path, _ in patch_firefox.FENIX_LEGACY_ICONS:
+        self.assertEqual(len(patch_firefox.FENIX_ADAPTIVE_ICONS), 2)
+        for asset_path, _ in (
+            *patch_firefox.FENIX_LEGACY_ICONS,
+            *patch_firefox.FENIX_ADAPTIVE_ICONS,
+        ):
             data = Path(asset_path).read_bytes()
             self.assertTrue(data.startswith(b"RIFF"), asset_path)
             self.assertEqual(data[8:12], b"WEBP", asset_path)
 
-        for overlay_name in (
-            "rfirefox-badge-square.svg",
-            "rfirefox-badge-round.svg",
-        ):
-            overlay = (patch_firefox.ICON_SOURCE_DIR / overlay_name).read_text(
-                encoding="utf-8"
-            )
-            self.assertNotIn("<text", overlay)
-            self.assertNotIn("font-family", overlay)
-            self.assertIn("<path", overlay)
+        for asset_path, _ in patch_firefox.FENIX_ADAPTIVE_ICONS:
+            data = Path(asset_path).read_bytes()
+            self.assertEqual(data[12:16], b"VP8L", asset_path)
+            self.assertEqual(data[20], 0x2F, asset_path)
+            lossless_header = int.from_bytes(data[21:25], "little")
+            width = (lossless_header & 0x3FFF) + 1
+            height = ((lossless_header >> 14) & 0x3FFF) + 1
+            self.assertEqual((width, height), (432, 432), asset_path)
+            self.assertTrue(lossless_header & (1 << 28), asset_path)
 
-    def test_legacy_launcher_assets_are_copied_idempotently(self) -> None:
+    def test_launcher_assets_are_copied_idempotently(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source_root = Path(directory)
             for _, relative_path in patch_firefox.FENIX_LEGACY_ICONS:
@@ -139,9 +163,16 @@ class CertificatePatchTest(unittest.TestCase):
                 destination.write_bytes(b"upstream icon")
 
             changed = patch_firefox.copy_branding_icons(source_root)
-            self.assertEqual(len(changed), len(patch_firefox.FENIX_LEGACY_ICONS))
+            self.assertEqual(
+                len(changed),
+                len(patch_firefox.FENIX_LEGACY_ICONS)
+                + len(patch_firefox.FENIX_ADAPTIVE_ICONS),
+            )
             self.assertEqual(patch_firefox.copy_branding_icons(source_root), [])
-            for asset_path, relative_path in patch_firefox.FENIX_LEGACY_ICONS:
+            for asset_path, relative_path in (
+                *patch_firefox.FENIX_LEGACY_ICONS,
+                *patch_firefox.FENIX_ADAPTIVE_ICONS,
+            ):
                 self.assertEqual(
                     (source_root / relative_path).read_bytes(),
                     Path(asset_path).read_bytes(),

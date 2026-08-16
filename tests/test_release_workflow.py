@@ -49,6 +49,23 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
         self.assertIn("bootstrap.log", bootstrap_script)
         self.assertIn("summary.txt", bootstrap_script)
 
+    def test_bootstrap_creates_the_default_mozconfig_before_building(self) -> None:
+        bootstrap_script = BOOTSTRAP_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'echo "MOZCONFIG=$RUNNER_TEMP/firefox-source/mozconfig"', self.workflow
+        )
+        self.assertNotIn(
+            'echo "MOZCONFIG=$RUNNER_TEMP/firefox-source/.mozconfig"', self.workflow
+        )
+        self.assertIn(
+            "unset MOZCONFIG ANDROID_HOME ANDROID_SDK_ROOT", bootstrap_script
+        )
+        self.assertLess(
+            bootstrap_script.index("unset MOZCONFIG"),
+            bootstrap_script.index("./mach --no-interactive bootstrap"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

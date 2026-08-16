@@ -72,7 +72,7 @@ jobs:
       - name: Set build paths
         run: |
           echo "FIREFOX_SOURCE_DIR=$RUNNER_TEMP/firefox-source" >> "$GITHUB_ENV"
-          echo "MOZCONFIG=$RUNNER_TEMP/firefox-source/.mozconfig" >> "$GITHUB_ENV"
+          echo "MOZCONFIG=$RUNNER_TEMP/firefox-source/mozconfig" >> "$GITHUB_ENV"
           echo "RFIREFOX_DEBUG_KEYSTORE=$GITHUB_WORKSPACE/signing/rfirefox-debug.keystore" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=" >> "$GITHUB_ENV"

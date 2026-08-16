@@ -7,9 +7,10 @@ Development.
 
 Mozilla Firefox source code is made available under the Mozilla Public License
 2.0 and other licenses recorded in the upstream source tree. Firefox and the
-Firefox logo are trademarks of the Mozilla Foundation. The current debug icon
-retains Mozilla's Firefox artwork and adds an `R` badge; this does not imply
-permission to distribute the trademark. Any distribution must preserve
+Firefox logo are trademarks of the Mozilla Foundation. The RFirefox launcher
+icon is a custom fox-R illustration created with Firefox as a visual reference;
+the application also retains upstream branding elsewhere. This does not imply
+permission to distribute Mozilla trademarks. Any distribution must preserve
 upstream notices and comply with Mozilla's trademark policy.
 
 The Russian Trusted Root CA certificate is public certificate material. Its
