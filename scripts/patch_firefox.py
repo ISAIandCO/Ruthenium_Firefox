@@ -399,6 +399,20 @@ def patch_fenix_gradle(source: str) -> str:
         '        applicationId "app.ruthenium"',
         "Fenix application ID",
     )
+    source = replace_once(
+        source,
+        '''            } else {
+                include "armeabi-v7a", "arm64-v8a", "x86_64"
+                if (gradle.mozconfig.substs.MOZILLA_OFFICIAL || System.getenv("MOZ_BUILD_CONFIG_LINT") == "1") {
+                    universalApk true
+                }
+            }''',
+        '''            } else {
+                // RFirefox currently publishes only the 64-bit ARM APK.
+                include "arm64-v8a"
+            }''',
+        "Fenix arm64-only ABI split",
+    )
     start = source.find("        release releaseTemplate >> {")
     end = source.find("        benchmark releaseTemplate >> {", start)
     if start == -1 or end == -1:

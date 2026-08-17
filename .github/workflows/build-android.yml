@@ -58,7 +58,7 @@ jobs:
           fi
 
   build:
-    name: Build RFirefox ${{ needs.resolve.outputs.version }} (${{ matrix.abi }})
+    name: Build RFirefox ${{ needs.resolve.outputs.version }} (arm64-v8a)
     needs: resolve
     # Scheduled checks skip versions that are already published. A manual run
     # intentionally rebuilds the current version so broken release assets can
@@ -66,19 +66,11 @@ jobs:
     if: needs.resolve.outputs.release_exists != 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 360
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - abi: arm64-v8a
-            target: aarch64-linux-android
-          - abi: armeabi-v7a
-            target: arm-linux-androideabi
-          - abi: x86_64
-            target: x86_64-linux-android
     env:
-      MOZ_OBJDIR_NAME: obj-ruthenium-${{ matrix.abi }}
+      MOZ_OBJDIR_NAME: obj-ruthenium-arm64-v8a
       RFIREFOX_DEBUG_CERT_SHA256: d7a19050129bbb6e7af6f29dc899a123757ca226ea0ee3c7395c43527592035f
+      RFIREFOX_TARGET: aarch64-linux-android
+      TARGET_ABI: arm64-v8a
     steps:
       - uses: actions/checkout@v4
 
@@ -126,10 +118,9 @@ jobs:
             ~/.mozbuild
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: firefox-android-${{ runner.os }}-${{ needs.resolve.outputs.revision }}-${{ matrix.abi }}
+          key: firefox-android-arm64-v2-${{ runner.os }}-${{ needs.resolve.outputs.revision }}
           restore-keys: |
-            firefox-android-${{ runner.os }}-${{ needs.resolve.outputs.revision }}-
-            firefox-android-${{ runner.os }}-
+            firefox-android-arm64-v2-${{ runner.os }}-
 
       - name: Download the exact stable source archive
         env:
@@ -158,12 +149,19 @@ jobs:
         working-directory: ${{ runner.temp }}/firefox-source
         env:
           RFIREFOX_BOOTSTRAP_HEARTBEAT_SECONDS: "60"
-          RFIREFOX_TARGET: ${{ matrix.target }}
         run: |
+          # The restored cache can contain mozboot's already-extracted Android
+          # NDK. Mozilla invokes `unzip -q` without overwrite flags, so that
+          # stale staging directory turns a non-interactive bootstrap into an
+          # EOF failure at the "replace android-ndk-r29/README.md?" prompt.
+          # This is an ephemeral GitHub-hosted runner with a fixed home path;
+          # remove only mozboot's disposable staging area before bootstrap.
+          test "$HOME" = "/home/runner"
+          rm -rf -- /home/runner/.mozbuild/mozboot
           bash "$GITHUB_WORKSPACE/scripts/run_bootstrap_with_heartbeat.sh"
           test -f "$MOZCONFIG"
           # Bootstrap follows the x86_64 runner architecture. Replace that
-          # generated target so this matrix leg compiles Gecko for its APK ABI.
+          # generated target so Gecko is compiled for the arm64 APK ABI.
           sed -i -E \
             '/^[[:space:]]*ac_add_options[[:space:]]+--target=/d' \
             "$MOZCONFIG"
@@ -182,7 +180,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: bootstrap-diagnostics-${{ matrix.abi }}-${{ needs.resolve.outputs.version }}-${{ github.run_id }}
+          name: bootstrap-diagnostics-arm64-v8a-${{ needs.resolve.outputs.version }}-${{ github.run_id }}
           path: ${{ runner.temp }}/rfirefox-bootstrap/
           if-no-files-found: warn
           retention-days: 7
@@ -210,10 +208,9 @@ jobs:
           GRADLE_INVOKED_WITHIN_MACH_BUILD: "1"
         run: ./mach gradle --no-daemon --max-workers=2 fenix:assembleRelease
 
-      - name: Collect and verify the ${{ matrix.abi }} APK
+      - name: Collect and verify the arm64-v8a APK
         env:
           RELEASE_TAG: ${{ needs.resolve.outputs.release_tag }}
-          TARGET_ABI: ${{ matrix.abi }}
         run: |
           output_dir="$FIREFOX_SOURCE_DIR/$MOZ_OBJDIR_NAME/gradle/build/mobile/android/fenix/app/outputs/apk/release"
           artifact_dir="$GITHUB_WORKSPACE/artifacts-$TARGET_ABI"
@@ -279,11 +276,11 @@ jobs:
           fi
           (cd "$artifact_dir" && sha256sum "$release_name") > "$release_apk.sha256"
 
-      - name: Upload the ${{ matrix.abi }} APK
+      - name: Upload the arm64-v8a APK
         uses: actions/upload-artifact@v4
         with:
-          name: rfirefox-apk-${{ matrix.abi }}
-          path: artifacts-${{ matrix.abi }}/
+          name: rfirefox-apk-arm64-v8a
+          path: artifacts-arm64-v8a/
           if-no-files-found: error
           retention-days: 2
 
@@ -296,27 +293,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all ABI APKs
+      - name: Download the arm64-v8a APK
         uses: actions/download-artifact@v4
         with:
-          pattern: rfirefox-apk-*
+          name: rfirefox-apk-arm64-v8a
           path: artifacts/
-          merge-multiple: true
 
-      - name: Verify the complete ABI set
+      - name: Verify the arm64-v8a release APK
         run: |
           mapfile -t apks < <(find artifacts -maxdepth 1 -type f -name '*.apk' -print | sort)
-          if [[ "${#apks[@]}" -ne 3 ]]; then
-            echo "::error title=Incomplete RFirefox release::Expected three ABI APKs, found ${#apks[@]}."
+          if [[ "${#apks[@]}" -ne 1 ]]; then
+            echo "::error title=Incomplete RFirefox release::Expected one arm64-v8a APK, found ${#apks[@]}."
             printf '%s\n' "${apks[@]}"
             exit 1
           fi
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            mapfile -t abi_apks < <(find artifacts -maxdepth 1 -type f -name "*-$abi-release.apk" -print)
-            test "${#abi_apks[@]}" -eq 1
-            python3 scripts/verify_android_apk.py --apk "${abi_apks[0]}" --abi "$abi"
-            (cd artifacts && sha256sum --check "$(basename "${abi_apks[0]}").sha256")
-          done
+          release_apk="${apks[0]}"
+          case "$(basename "$release_apk")" in
+            *-arm64-v8a-release.apk) ;;
+            *)
+              echo "::error title=Unexpected RFirefox release::Expected an arm64-v8a APK."
+              exit 1
+              ;;
+          esac
+          python3 scripts/verify_android_apk.py --apk "$release_apk" --abi arm64-v8a
+          (cd artifacts && sha256sum --check "$(basename "$release_apk").sha256")
 
       - name: Write release metadata
         env:
@@ -333,8 +333,8 @@ jobs:
           Mozilla revision: $FIREFOX_REVISION
           Release tag: $RELEASE_TAG
           Application ID: app.ruthenium.firefox
-          ABIs: arm64-v8a,armeabi-v7a,x86_64
-          Gecko native libraries: built and verified separately for every ABI
+          ABI: arm64-v8a
+          Gecko native libraries: built and verified for arm64-v8a
           Signing: public repository Android debug key
           Signing certificate SHA-256: $RFIREFOX_DEBUG_CERT_SHA256
           Scoped CA DNS names: .ru,.xn--p1ai,.su
@@ -345,18 +345,18 @@ jobs:
           {
             echo "RFirefox $RELEASE_TAG"
             echo
-            echo "Debug-signed installable APKs built from Mozilla tag $FIREFOX_TAG."
+            echo "Debug-signed installable arm64-v8a APK built from Mozilla tag $FIREFOX_TAG."
             echo
             echo "- Mozilla revision: $FIREFOX_REVISION"
             echo "- Android application ID: app.ruthenium.firefox"
-            echo "- ABIs: arm64-v8a, armeabi-v7a and x86_64"
-            echo "- Gecko native libraries are built and verified separately for every ABI"
+            echo "- ABI: arm64-v8a"
+            echo "- Gecko native libraries are built and verified for arm64-v8a"
             echo "- Public debug signer SHA-256: $RFIREFOX_DEBUG_CERT_SHA256"
             echo "- Added CA scope: DNS names under .ru, .xn--p1ai and .su; IP SANs are rejected"
             echo
             echo "Warning: the debug private key is public and does not authenticate the publisher."
             echo
-            echo "Verify each APK with the adjacent .sha256 file before installation."
+            echo "Verify the APK with the adjacent .sha256 file before installation."
           } > artifacts/release-notes.md
 
       - name: Upload debug-signed build artifact
