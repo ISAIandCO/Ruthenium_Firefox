@@ -59,7 +59,7 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
         for abi, target in (
             ("arm64-v8a", "aarch64-linux-android"),
             ("armeabi-v7a", "arm-linux-androideabi"),
-            ("x86", "i686-linux-android"),
+            ("x86_64", "x86_64-linux-android"),
         ):
             self.assertIn(f"- abi: {abi}", self.workflow)
             self.assertIn(f"target: {target}", self.workflow)
@@ -76,7 +76,7 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
             "'/^[[:space:]]*ac_add_options[[:space:]]+--target=/d'",
             self.workflow,
         )
-        self.assertNotIn("x86_64-linux-android", self.workflow)
+        self.assertNotIn("i686-linux-android", self.workflow)
 
     def test_each_apk_must_contain_matching_gecko_libraries(self) -> None:
         self.assertIn("scripts/verify_android_apk.py", self.workflow)
@@ -91,14 +91,14 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
         self.assertIn("pattern: rufox-apk-*", self.workflow)
         self.assertIn("merge-multiple: true", self.workflow)
         self.assertIn(
-            "expected_abis=(arm64-v8a armeabi-v7a x86)", self.workflow
+            "expected_abis=(arm64-v8a armeabi-v7a x86_64)", self.workflow
         )
         self.assertIn(
             'if [[ "${#apks[@]}" -ne "${#expected_abis[@]}" ]]',
             self.workflow,
         )
         self.assertIn('--abi "$abi"', self.workflow)
-        self.assertIn("ABIs: arm64-v8a, armeabi-v7a, x86", self.workflow)
+        self.assertIn("ABIs: arm64-v8a, armeabi-v7a, x86_64", self.workflow)
 
     def test_matrix_jobs_do_not_share_abi_caches_or_object_directories(self) -> None:
         self.assertIn(

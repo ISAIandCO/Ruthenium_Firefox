@@ -72,8 +72,8 @@ jobs:
             target: aarch64-linux-android
           - abi: armeabi-v7a
             target: arm-linux-androideabi
-          - abi: x86
-            target: i686-linux-android
+          - abi: x86_64
+            target: x86_64-linux-android
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
@@ -313,7 +313,7 @@ jobs:
 
       - name: Verify all release APKs
         run: |
-          expected_abis=(arm64-v8a armeabi-v7a x86)
+          expected_abis=(arm64-v8a armeabi-v7a x86_64)
           mapfile -t apks < <(find artifacts -maxdepth 1 -type f -name '*.apk' -print | sort)
           if [[ "${#apks[@]}" -ne "${#expected_abis[@]}" ]]; then
             echo "::error title=Incomplete Rufox release::Expected ${#expected_abis[@]} APKs, found ${#apks[@]}."
@@ -350,7 +350,7 @@ jobs:
           Mozilla revision: $FIREFOX_REVISION
           Release tag: $RELEASE_TAG
           Application ID: app.ruthenium.firefox
-          ABIs: arm64-v8a, armeabi-v7a, x86
+          ABIs: arm64-v8a, armeabi-v7a, x86_64
           Gecko native libraries: independently built and verified for every ABI
           Signing: public repository Android debug key
           Signing certificate SHA-256: $RFIREFOX_DEBUG_CERT_SHA256
@@ -366,7 +366,7 @@ jobs:
             echo
             echo "- Mozilla revision: $FIREFOX_REVISION"
             echo "- Android application ID: app.ruthenium.firefox"
-            echo "- ABIs: arm64-v8a, armeabi-v7a, x86"
+            echo "- ABIs: arm64-v8a, armeabi-v7a, x86_64"
             echo "- Gecko native libraries are independently built and verified for every ABI"
             echo "- Public debug signer SHA-256: $RFIREFOX_DEBUG_CERT_SHA256"
             echo "- Added CA scope: DNS names under .ru, .xn--p1ai and .su; IP SANs are rejected"

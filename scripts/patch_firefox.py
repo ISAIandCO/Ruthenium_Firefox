@@ -410,7 +410,7 @@ def patch_fenix_gradle(source: str) -> str:
         '''            } else {
                 // Build one ABI selected by the isolated CI matrix job.
                 def rfirefoxTargetAbi = System.getenv("RFIREFOX_TARGET_ABI")
-                def rfirefoxSupportedAbis = ["armeabi-v7a", "arm64-v8a", "x86"]
+                def rfirefoxSupportedAbis = ["armeabi-v7a", "arm64-v8a", "x86_64"]
                 if (!rfirefoxTargetAbi || !rfirefoxSupportedAbis.contains(rfirefoxTargetAbi)) {
                     throw new GradleException(
                         "RFIREFOX_TARGET_ABI must be one of: " +
