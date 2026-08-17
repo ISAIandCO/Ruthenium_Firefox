@@ -25,6 +25,10 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
         self.assertNotIn("-PdisableDebugSigning", self.workflow)
         self.assertNotIn('"$apksigner" sign', self.workflow)
         self.assertIn('"$apksigner" verify', self.workflow)
+        self.assertIn("parse_apksigner_output.py", self.workflow)
+        self.assertNotIn(
+            "s/^Signer #1 certificate SHA-256 digest: //p", self.workflow
+        )
         self.assertIn("signing/rfirefox-debug.keystore", self.workflow)
         self.assertIn("d7a19050129bbb6e7af6f29dc899a123757ca226ea0ee3c7395c43527592035f", self.workflow)
         self.assertIn('release_tag="${FIREFOX_VERSION}_debug"', self.workflow)
