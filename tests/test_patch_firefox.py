@@ -172,7 +172,7 @@ Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
         self.assertIn('applicationId "app.ruthenium"', patched)
         self.assertIn('System.getenv("RFIREFOX_TARGET_ABI")', patched)
         self.assertIn(
-            '["armeabi-v7a", "arm64-v8a", "x86"]',
+            '["armeabi-v7a", "arm64-v8a", "x86_64"]',
             patched,
         )
         self.assertIn("include rfirefoxTargetAbi", patched)
