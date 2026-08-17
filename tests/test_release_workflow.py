@@ -46,34 +46,51 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
         self.assertIn('gh release upload "$RELEASE_TAG"', self.workflow)
         self.assertIn("--clobber", self.workflow)
 
-    def test_gecko_is_built_separately_for_every_apk_abi(self) -> None:
-        for abi, target in (
-            ("arm64-v8a", "aarch64-linux-android"),
-            ("armeabi-v7a", "arm-linux-androideabi"),
-            ("x86_64", "x86_64-linux-android"),
-        ):
-            self.assertIn(f"- abi: {abi}", self.workflow)
-            self.assertIn(f"target: {target}", self.workflow)
-        self.assertIn("fail-fast: false", self.workflow)
-        self.assertIn("obj-ruthenium-${{ matrix.abi }}", self.workflow)
+    def test_gecko_is_built_for_arm64_only(self) -> None:
+        self.assertIn("TARGET_ABI: arm64-v8a", self.workflow)
+        self.assertIn("RFIREFOX_TARGET: aarch64-linux-android", self.workflow)
+        self.assertIn("MOZ_OBJDIR_NAME: obj-ruthenium-arm64-v8a", self.workflow)
+        self.assertNotIn("arm-linux-androideabi", self.workflow)
+        self.assertNotIn("x86_64-linux-android", self.workflow)
+        self.assertNotIn("matrix:", self.workflow)
         self.assertIn("ac_add_options --target=$RFIREFOX_TARGET", self.workflow)
         self.assertIn(
             "'/^[[:space:]]*ac_add_options[[:space:]]+--target=/d'",
             self.workflow,
         )
 
-    def test_each_apk_must_contain_matching_gecko_libraries(self) -> None:
+    def test_arm64_apk_must_contain_matching_gecko_libraries(self) -> None:
         self.assertIn("scripts/verify_android_apk.py", self.workflow)
         self.assertIn('--abi "$TARGET_ABI"', self.workflow)
         self.assertIn('native-code: \'$TARGET_ABI\'', self.workflow)
-        self.assertIn('name: rfirefox-apk-${{ matrix.abi }}', self.workflow)
+        self.assertIn("name: rfirefox-apk-arm64-v8a", self.workflow)
 
-    def test_release_is_published_only_after_all_abis_pass(self) -> None:
+    def test_release_is_published_only_after_arm64_passes(self) -> None:
         self.assertIn("needs: [resolve, build]", self.workflow)
         self.assertIn("needs.build.result == 'success'", self.workflow)
-        self.assertIn("pattern: rfirefox-apk-*", self.workflow)
-        self.assertIn('if [[ "${#apks[@]}" -ne 3 ]]', self.workflow)
-        self.assertIn("for abi in arm64-v8a armeabi-v7a x86_64", self.workflow)
+        self.assertIn("name: rfirefox-apk-arm64-v8a", self.workflow)
+        self.assertIn('if [[ "${#apks[@]}" -ne 1 ]]', self.workflow)
+        self.assertIn('--abi arm64-v8a', self.workflow)
+        self.assertIn("ABI: arm64-v8a", self.workflow)
+
+    def test_bootstrap_discards_cached_mozboot_staging(self) -> None:
+        self.assertIn(
+            "key: firefox-android-arm64-v2-${{ runner.os }}-",
+            self.workflow,
+        )
+        self.assertNotIn(
+            "firefox-android-${{ runner.os }}-${{ needs.resolve.outputs.revision }}-",
+            self.workflow,
+        )
+        cleanup = "rm -rf -- /home/runner/.mozbuild/mozboot"
+        self.assertIn('test "$HOME" = "/home/runner"', self.workflow)
+        self.assertIn(cleanup, self.workflow)
+        self.assertLess(
+            self.workflow.index(cleanup),
+            self.workflow.index(
+                'bash "$GITHUB_WORKSPACE/scripts/run_bootstrap_with_heartbeat.sh"'
+            ),
+        )
 
     def test_bootstrap_has_live_diagnostics_without_an_extra_timeout(self) -> None:
         bootstrap_script = BOOTSTRAP_SCRIPT.read_text(encoding="utf-8")

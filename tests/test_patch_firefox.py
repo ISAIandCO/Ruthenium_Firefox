@@ -141,6 +141,18 @@ Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
     defaultConfig {
         applicationId "org.mozilla"
     }
+    splits {
+        abi {
+            if (project.hasProperty("benchmarkTest")) {
+                include "arm64-v8a"
+            } else {
+                include "armeabi-v7a", "arm64-v8a", "x86_64"
+                if (gradle.mozconfig.substs.MOZILLA_OFFICIAL || System.getenv("MOZ_BUILD_CONFIG_LINT") == "1") {
+                    universalApk true
+                }
+            }
+        }
+    }
     buildTypes {
         release releaseTemplate >> {
             def deepLinkSchemeValue = "fenix"
@@ -158,6 +170,11 @@ Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
         self.assertIn("RFIREFOX_DEBUG_KEYSTORE", patched)
         self.assertIn('signingConfigs.debug.keyAlias = "androiddebugkey"', patched)
         self.assertIn('applicationId "app.ruthenium"', patched)
+        self.assertIn("RFirefox currently publishes only the 64-bit ARM APK", patched)
+        self.assertNotIn(
+            'include "armeabi-v7a", "arm64-v8a", "x86_64"', patched
+        )
+        self.assertNotIn("universalApk true", patched)
         self.assertEqual(patched, patch_firefox.patch_fenix_gradle(patched))
 
     def test_launcher_uses_integrated_fox_r_adaptive_assets(self) -> None:
