@@ -123,6 +123,22 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
         )
         self.assertIn("Product: Rufox", self.workflow)
 
+    def test_release_publication_retries_and_is_idempotent(self) -> None:
+        self.assertIn("retry_gh() {", self.workflow)
+        self.assertIn("max_attempts=5", self.workflow)
+        self.assertIn("delay_seconds=$((delay_seconds * 2))", self.workflow)
+        self.assertIn('gh release view "$RELEASE_TAG"', self.workflow)
+        self.assertIn("release_ready=true", self.workflow)
+        self.assertIn(
+            "for asset in artifacts/*.apk artifacts/*.apk.sha256 "
+            "artifacts/build-info.txt",
+            self.workflow,
+        )
+        self.assertIn(
+            'retry_gh gh release upload "$RELEASE_TAG" "$asset" --clobber',
+            self.workflow,
+        )
+
     def test_bootstrap_discards_cached_mozboot_staging(self) -> None:
         cleanup = "rm -rf -- /home/runner/.mozbuild/mozboot"
         self.assertIn('test "$HOME" = "/home/runner"', self.workflow)

@@ -394,22 +394,78 @@ jobs:
           RELEASE_TAG: ${{ needs.resolve.outputs.release_tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          retry_gh() {
+            local attempt=1
+            local max_attempts=5
+            local delay_seconds=10
+            local status
+
+            while true; do
+              if "$@"; then
+                return 0
+              else
+                status=$?
+              fi
+              if (( attempt >= max_attempts )); then
+                echo "::error::GitHub CLI command failed after $attempt attempts: $*"
+                return "$status"
+              fi
+              echo "::warning::GitHub CLI command failed on attempt $attempt/$max_attempts; retrying in ${delay_seconds}s: $*"
+              sleep "$delay_seconds"
+              attempt=$((attempt + 1))
+              delay_seconds=$((delay_seconds * 2))
+            done
+          }
+
+          edit_release() {
+            retry_gh gh release edit "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_TAG" \
+              --notes-file artifacts/release-notes.md
+          }
+
           if [[ "$RELEASE_EXISTS" == "true" ]]; then
-            gh release edit "$RELEASE_TAG" \
-              --target "$GITHUB_SHA" \
-              --title "$RELEASE_TAG" \
-              --notes-file artifacts/release-notes.md
-            gh release upload "$RELEASE_TAG" \
-              artifacts/*.apk \
-              artifacts/*.apk.sha256 \
-              artifacts/build-info.txt \
-              --clobber
+            edit_release
           else
-            gh release create "$RELEASE_TAG" \
-              artifacts/*.apk \
-              artifacts/*.apk.sha256 \
-              artifacts/build-info.txt \
-              --target "$GITHUB_SHA" \
-              --title "$RELEASE_TAG" \
-              --notes-file artifacts/release-notes.md
+            release_ready=false
+            attempt=1
+            max_attempts=5
+            delay_seconds=10
+            create_status=1
+
+            while (( attempt <= max_attempts )); do
+              if gh release create "$RELEASE_TAG" \
+                --target "$GITHUB_SHA" \
+                --title "$RELEASE_TAG" \
+                --notes-file artifacts/release-notes.md; then
+                release_ready=true
+                break
+              else
+                create_status=$?
+              fi
+
+              # A request can reach GitHub even when the runner receives a
+              # transient error. Treat an observable release as success.
+              if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+                release_ready=true
+                break
+              fi
+              if (( attempt >= max_attempts )); then
+                break
+              fi
+              echo "::warning::Release creation failed on attempt $attempt/$max_attempts; retrying in ${delay_seconds}s."
+              sleep "$delay_seconds"
+              attempt=$((attempt + 1))
+              delay_seconds=$((delay_seconds * 2))
+            done
+
+            if [[ "$release_ready" != "true" ]]; then
+              echo "::error::Could not create release $RELEASE_TAG after $max_attempts attempts."
+              exit "$create_status"
+            fi
+            edit_release
           fi
+
+          for asset in artifacts/*.apk artifacts/*.apk.sha256 artifacts/build-info.txt; do
+            retry_gh gh release upload "$RELEASE_TAG" "$asset" --clobber
+          done
