@@ -18,6 +18,7 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
         trigger_section = self.workflow.split("permissions:", 1)[0]
         self.assertIn("workflow_dispatch:", trigger_section)
         self.assertIn("schedule:", trigger_section)
+        self.assertIn('- cron: "17 3 1,7,14,21,28 * *"', trigger_section)
         self.assertNotIn("push:", trigger_section)
         self.assertNotIn("pull_request:", trigger_section)
 
@@ -30,7 +31,10 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
             "s/^Signer #1 certificate SHA-256 digest: //p", self.workflow
         )
         self.assertIn("signing/rfirefox-debug.keystore", self.workflow)
-        self.assertIn("d7a19050129bbb6e7af6f29dc899a123757ca226ea0ee3c7395c43527592035f", self.workflow)
+        self.assertIn(
+            "d7a19050129bbb6e7af6f29dc899a123757ca226ea0ee3c7395c43527592035f",
+            self.workflow,
+        )
         self.assertIn('release_tag="${FIREFOX_VERSION}_debug"', self.workflow)
         self.assertIn('--title "$RELEASE_TAG"', self.workflow)
         self.assertIn('gh release create "$RELEASE_TAG"', self.workflow)
@@ -42,46 +46,84 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
             "github.event_name == 'workflow_dispatch'",
             self.workflow,
         )
-        self.assertIn('RELEASE_EXISTS: ${{ needs.resolve.outputs.release_exists }}', self.workflow)
+        self.assertIn(
+            'RELEASE_EXISTS: ${{ needs.resolve.outputs.release_exists }}',
+            self.workflow,
+        )
         self.assertIn('gh release upload "$RELEASE_TAG"', self.workflow)
         self.assertIn("--clobber", self.workflow)
 
-    def test_gecko_is_built_for_arm64_only(self) -> None:
-        self.assertIn("TARGET_ABI: arm64-v8a", self.workflow)
-        self.assertIn("RFIREFOX_TARGET: aarch64-linux-android", self.workflow)
-        self.assertIn("MOZ_OBJDIR_NAME: obj-ruthenium-arm64-v8a", self.workflow)
-        self.assertNotIn("arm-linux-androideabi", self.workflow)
-        self.assertNotIn("x86_64-linux-android", self.workflow)
-        self.assertNotIn("matrix:", self.workflow)
-        self.assertIn("ac_add_options --target=$RFIREFOX_TARGET", self.workflow)
+    def test_each_abi_uses_an_isolated_matrix_job(self) -> None:
+        self.assertIn("strategy:", self.workflow)
+        self.assertIn("fail-fast: false", self.workflow)
+        for abi, target in (
+            ("arm64-v8a", "aarch64-linux-android"),
+            ("armeabi-v7a", "arm-linux-androideabi"),
+            ("x86", "i686-linux-android"),
+        ):
+            self.assertIn(f"- abi: {abi}", self.workflow)
+            self.assertIn(f"target: {target}", self.workflow)
+        self.assertIn(
+            "MOZ_OBJDIR_NAME: obj-ruthenium-${{ matrix.abi }}", self.workflow
+        )
+        self.assertIn("RFIREFOX_TARGET: ${{ matrix.target }}", self.workflow)
+        self.assertIn("TARGET_ABI: ${{ matrix.abi }}", self.workflow)
+        self.assertIn("RFIREFOX_TARGET_ABI: ${{ matrix.abi }}", self.workflow)
+        self.assertIn(
+            "ac_add_options --target=$RFIREFOX_TARGET", self.workflow
+        )
         self.assertIn(
             "'/^[[:space:]]*ac_add_options[[:space:]]+--target=/d'",
             self.workflow,
         )
+        self.assertNotIn("x86_64-linux-android", self.workflow)
 
-    def test_arm64_apk_must_contain_matching_gecko_libraries(self) -> None:
+    def test_each_apk_must_contain_matching_gecko_libraries(self) -> None:
         self.assertIn("scripts/verify_android_apk.py", self.workflow)
         self.assertIn('--abi "$TARGET_ABI"', self.workflow)
-        self.assertIn('native-code: \'$TARGET_ABI\'', self.workflow)
-        self.assertIn("name: rfirefox-apk-arm64-v8a", self.workflow)
+        self.assertIn("native-code: '$TARGET_ABI'", self.workflow)
+        self.assertIn("name: rufox-apk-${{ matrix.abi }}", self.workflow)
+        self.assertIn("path: artifacts-${{ matrix.abi }}/", self.workflow)
 
-    def test_release_is_published_only_after_arm64_passes(self) -> None:
+    def test_release_is_published_only_after_all_abis_pass(self) -> None:
         self.assertIn("needs: [resolve, build]", self.workflow)
         self.assertIn("needs.build.result == 'success'", self.workflow)
-        self.assertIn("name: rfirefox-apk-arm64-v8a", self.workflow)
-        self.assertIn('if [[ "${#apks[@]}" -ne 1 ]]', self.workflow)
-        self.assertIn('--abi arm64-v8a', self.workflow)
-        self.assertIn("ABI: arm64-v8a", self.workflow)
+        self.assertIn("pattern: rufox-apk-*", self.workflow)
+        self.assertIn("merge-multiple: true", self.workflow)
+        self.assertIn(
+            "expected_abis=(arm64-v8a armeabi-v7a x86)", self.workflow
+        )
+        self.assertIn(
+            'if [[ "${#apks[@]}" -ne "${#expected_abis[@]}" ]]',
+            self.workflow,
+        )
+        self.assertIn('--abi "$abi"', self.workflow)
+        self.assertIn("ABIs: arm64-v8a, armeabi-v7a, x86", self.workflow)
+
+    def test_matrix_jobs_do_not_share_abi_caches_or_object_directories(self) -> None:
+        self.assertIn(
+            "key: firefox-android-${{ matrix.abi }}-v3-${{ runner.os }}-",
+            self.workflow,
+        )
+        self.assertIn(
+            "restore-keys: |\n"
+            "            firefox-android-${{ matrix.abi }}-v3-${{ runner.os }}-",
+            self.workflow,
+        )
+        self.assertIn(
+            "MOZ_OBJDIR_NAME: obj-ruthenium-${{ matrix.abi }}", self.workflow
+        )
+
+    def test_rufox_branding_is_checked_before_publish(self) -> None:
+        self.assertIn("Build and release Rufox for Android", self.workflow)
+        self.assertIn("application-label:'Rufox'", self.workflow)
+        self.assertIn(
+            'release_name="Rufox-$RELEASE_TAG-$upstream_name.apk"',
+            self.workflow,
+        )
+        self.assertIn("Product: Rufox", self.workflow)
 
     def test_bootstrap_discards_cached_mozboot_staging(self) -> None:
-        self.assertIn(
-            "key: firefox-android-arm64-v2-${{ runner.os }}-",
-            self.workflow,
-        )
-        self.assertNotIn(
-            "firefox-android-${{ runner.os }}-${{ needs.resolve.outputs.revision }}-",
-            self.workflow,
-        )
         cleanup = "rm -rf -- /home/runner/.mozbuild/mozboot"
         self.assertIn('test "$HOME" = "/home/runner"', self.workflow)
         self.assertIn(cleanup, self.workflow)

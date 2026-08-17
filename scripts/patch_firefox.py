@@ -408,10 +408,18 @@ def patch_fenix_gradle(source: str) -> str:
                 }
             }''',
         '''            } else {
-                // RFirefox currently publishes only the 64-bit ARM APK.
-                include "arm64-v8a"
+                // Build one ABI selected by the isolated CI matrix job.
+                def rfirefoxTargetAbi = System.getenv("RFIREFOX_TARGET_ABI")
+                def rfirefoxSupportedAbis = ["armeabi-v7a", "arm64-v8a", "x86"]
+                if (!rfirefoxTargetAbi || !rfirefoxSupportedAbis.contains(rfirefoxTargetAbi)) {
+                    throw new GradleException(
+                        "RFIREFOX_TARGET_ABI must be one of: " +
+                            rfirefoxSupportedAbis.join(", ")
+                    )
+                }
+                include rfirefoxTargetAbi
             }''',
-        "Fenix arm64-only ABI split",
+        "Fenix single-ABI split",
     )
     start = source.find("        release releaseTemplate >> {")
     end = source.find("        benchmark releaseTemplate >> {", start)
@@ -422,7 +430,7 @@ def patch_fenix_gradle(source: str) -> str:
         section,
         "        release releaseTemplate >> {\n",
         """        release releaseTemplate >> {
-            // RFirefox development releases use the public debug key that is
+            // Rufox development releases use the public debug key that is
             // pinned and passed in by the build tooling repository.
             def rfirefoxDebugKeystore = System.getenv("RFIREFOX_DEBUG_KEYSTORE")
             if (!rfirefoxDebugKeystore) {
@@ -453,11 +461,11 @@ def patch_fenix_gradle(source: str) -> str:
 def patch_fenix_strings(source: str) -> str:
     replacements = {
         '<string name="app_name" translatable="false">Firefox Fenix</string>':
-            '<string name="app_name" translatable="false">RFirefox</string>',
+            '<string name="app_name" translatable="false">Rufox</string>',
         '<string name="firefox" translatable="false">Firefox</string>':
-            '<string name="firefox" translatable="false">RFirefox</string>',
+            '<string name="firefox" translatable="false">Rufox</string>',
         '<string name="app_name_firefox" tools:ignore="BrandUsage">Firefox</string>':
-            '<string name="app_name_firefox" tools:ignore="BrandUsage">RFirefox</string>',
+            '<string name="app_name_firefox" tools:ignore="BrandUsage">Rufox</string>',
     }
     for old, new in replacements.items():
         source = replace_once(source, old, new, "Fenix application name")
@@ -468,13 +476,13 @@ def patch_fenix_release_strings(source: str) -> str:
     return replace_once(
         source,
         '<string name="app_name" translatable="false">Firefox</string>',
-        '<string name="app_name" translatable="false">RFirefox</string>',
+        '<string name="app_name" translatable="false">Rufox</string>',
         "Fenix release application name",
     )
 
 
 RFIREFOX_ADAPTIVE_FOREGROUND = """<?xml version="1.0" encoding="utf-8"?>
-<!-- RFirefox adaptive fox-R foreground. -->
+<!-- Rufox adaptive fox-R foreground. -->
 <bitmap xmlns:android="http://schemas.android.com/apk/res/android"
     android:src="@drawable/rfirefox_launcher_foreground"
     android:antialias="true"
@@ -484,7 +492,7 @@ RFIREFOX_ADAPTIVE_FOREGROUND = """<?xml version="1.0" encoding="utf-8"?>
 """
 
 RFIREFOX_THEMED_ICON_COMMENT = (
-    "    <!-- RFirefox intentionally keeps its full-colour fox-R artwork when "
+    "    <!-- Rufox intentionally keeps its full-colour fox-R artwork when "
     "themed icons are enabled. -->\n"
 )
 
