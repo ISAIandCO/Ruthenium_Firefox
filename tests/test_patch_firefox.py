@@ -191,29 +191,8 @@ Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
             patch_firefox.patch_fenix_launcher_foreground(patched),
         )
 
-        monochrome = patch_firefox.patch_fenix_launcher_monochrome(upstream)
-        self.assertEqual(monochrome, patch_firefox.RFIREFOX_ADAPTIVE_MONOCHROME)
-        self.assertNotIn('android:pathData="M0,0"', monochrome)
-        self.assertIn("RFirefox adaptive fox-R monochrome layer", monochrome)
-        self.assertIn(
-            'android:src="@drawable/rfirefox_launcher_monochrome"', monochrome
-        )
-        self.assertNotIn("<path", monochrome)
-        monochrome_root = ElementTree.fromstring(monochrome)
-        self.assertEqual(monochrome_root.tag, "bitmap")
-        self.assertEqual(
-            monochrome_root.attrib[
-                "{http://schemas.android.com/apk/res/android}src"
-            ],
-            "@drawable/rfirefox_launcher_monochrome",
-        )
-        self.assertEqual(
-            monochrome,
-            patch_firefox.patch_fenix_launcher_monochrome(monochrome),
-        )
-
         self.assertEqual(len(patch_firefox.FENIX_LEGACY_ICONS), 10)
-        self.assertEqual(len(patch_firefox.FENIX_ADAPTIVE_ICONS), 2)
+        self.assertEqual(len(patch_firefox.FENIX_ADAPTIVE_ICONS), 1)
         for asset_path, _ in (
             *patch_firefox.FENIX_LEGACY_ICONS,
             *patch_firefox.FENIX_ADAPTIVE_ICONS,
@@ -231,6 +210,23 @@ Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
             height = ((lossless_header >> 14) & 0x3FFF) + 1
             self.assertEqual((width, height), (432, 432), asset_path)
             self.assertTrue(lossless_header & (1 << 28), asset_path)
+
+    def test_themed_launcher_does_not_flatten_fox_r_to_black_r(self) -> None:
+        adaptive_icon = """<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
+</adaptive-icon>
+"""
+        adaptive_icon = patch_firefox.patch_fenix_adaptive_icon(adaptive_icon)
+        self.assertIn("intentionally keeps its full-colour", adaptive_icon)
+        self.assertNotIn("<monochrome", adaptive_icon)
+        adaptive_root = ElementTree.fromstring(adaptive_icon)
+        self.assertEqual(adaptive_root.tag, "adaptive-icon")
+        self.assertEqual(
+            adaptive_icon,
+            patch_firefox.patch_fenix_adaptive_icon(adaptive_icon),
+        )
 
     def test_launcher_assets_are_copied_idempotently(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

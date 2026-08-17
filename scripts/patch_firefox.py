@@ -37,8 +37,11 @@ FENIX_LAUNCHER_FOREGROUND = Path(
 FENIX_RELEASE_LAUNCHER_FOREGROUND = Path(
     "mobile/android/fenix/app/src/release/res/drawable/ic_launcher_foreground.xml"
 )
-FENIX_LAUNCHER_MONOCHROME = Path(
-    "mobile/android/fenix/app/src/main/res/drawable/ic_launcher_monochrome.xml"
+FENIX_ADAPTIVE_ICON = Path(
+    "mobile/android/fenix/app/src/main/res/mipmap-anydpi/ic_launcher.xml"
+)
+FENIX_ADAPTIVE_ROUND_ICON = Path(
+    "mobile/android/fenix/app/src/main/res/mipmap-anydpi/ic_launcher_round.xml"
 )
 
 ICON_SOURCE_DIR = REPOSITORY_ROOT / "branding/android"
@@ -70,13 +73,6 @@ FENIX_ADAPTIVE_ICONS = (
             "rfirefox_launcher_foreground.webp"
         ),
     ),
-    (
-        ICON_SOURCE_DIR / "rfirefox-adaptive-monochrome.webp",
-        Path(
-            "mobile/android/fenix/app/src/main/res/drawable-xxxhdpi/"
-            "rfirefox_launcher_monochrome.webp"
-        ),
-    ),
 )
 
 TEXT_TARGETS = (
@@ -89,7 +85,8 @@ TEXT_TARGETS = (
     FENIX_RELEASE_STRINGS,
     FENIX_LAUNCHER_FOREGROUND,
     FENIX_RELEASE_LAUNCHER_FOREGROUND,
-    FENIX_LAUNCHER_MONOCHROME,
+    FENIX_ADAPTIVE_ICON,
+    FENIX_ADAPTIVE_ROUND_ICON,
 )
 
 BEGIN_MARKER = "// BEGIN Ruthenium scoped Russian CA"
@@ -472,15 +469,10 @@ RFIREFOX_ADAPTIVE_FOREGROUND = """<?xml version="1.0" encoding="utf-8"?>
     android:gravity="fill" />
 """
 
-RFIREFOX_ADAPTIVE_MONOCHROME = """<?xml version="1.0" encoding="utf-8"?>
-<!-- RFirefox adaptive fox-R monochrome layer. -->
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@drawable/rfirefox_launcher_monochrome"
-    android:antialias="true"
-    android:dither="true"
-    android:filter="true"
-    android:gravity="fill" />
-"""
+RFIREFOX_THEMED_ICON_COMMENT = (
+    "    <!-- RFirefox intentionally keeps its full-colour fox-R artwork when "
+    "themed icons are enabled. -->\n"
+)
 
 
 def patch_fenix_launcher_foreground(source: str) -> str:
@@ -492,13 +484,21 @@ def patch_fenix_launcher_foreground(source: str) -> str:
     return RFIREFOX_ADAPTIVE_FOREGROUND
 
 
-def patch_fenix_launcher_monochrome(source: str) -> str:
-    if source == RFIREFOX_ADAPTIVE_MONOCHROME:
+def patch_fenix_adaptive_icon(source: str) -> str:
+    if RFIREFOX_THEMED_ICON_COMMENT in source:
         return source
-    required = ('<vector xmlns:android=', 'android:viewportWidth="108"', '<path')
+    required = (
+        "<adaptive-icon ",
+        '<foreground android:drawable="@drawable/ic_launcher_foreground"/>',
+        '<monochrome android:drawable="@drawable/ic_launcher_monochrome"/>',
+    )
     if not all(anchor in source for anchor in required):
-        raise ValueError("Fenix monochrome launcher has an unexpected format")
-    return RFIREFOX_ADAPTIVE_MONOCHROME
+        raise ValueError("Fenix adaptive launcher icon has an unexpected format")
+    return source.replace(
+        '    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>\n',
+        RFIREFOX_THEMED_ICON_COMMENT,
+        1,
+    )
 
 
 TRANSFORMS: dict[Path, Callable[[str], str]] = {
@@ -511,7 +511,8 @@ TRANSFORMS: dict[Path, Callable[[str], str]] = {
     FENIX_RELEASE_STRINGS: patch_fenix_release_strings,
     FENIX_LAUNCHER_FOREGROUND: patch_fenix_launcher_foreground,
     FENIX_RELEASE_LAUNCHER_FOREGROUND: patch_fenix_launcher_foreground,
-    FENIX_LAUNCHER_MONOCHROME: patch_fenix_launcher_monochrome,
+    FENIX_ADAPTIVE_ICON: patch_fenix_adaptive_icon,
+    FENIX_ADAPTIVE_ROUND_ICON: patch_fenix_adaptive_icon,
 }
 
 

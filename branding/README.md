@@ -13,20 +13,20 @@ release source set:
 - `rfirefox-round-<density>.webp` replaces the round legacy
   `ic_launcher_round.webp`;
 - `rfirefox-adaptive-foreground.webp` is the transparent colour foreground for
-  adaptive icons;
-- `rfirefox-adaptive-monochrome.webp` is its alpha-preserving silhouette for
-  Android themed icons.
+  adaptive icons.
 
 The legacy outputs retain the upstream pixel dimensions: 48, 76, 96, 144 and
 192 px for mdpi through xxxhdpi. Lossless 512 px source renders are stored as
 `rfirefox-square-master.webp` and `rfirefox-round-master.webp`.
 
-The adaptive assets are 432 px in `drawable-xxxhdpi`, which maps to the 108 dp
-launcher canvas. Their transparent padding keeps the fox-R inside the adaptive
-safe zone while Android supplies the existing release background and applies
-the user's circle, squircle or other launcher mask. `scripts/patch_firefox.py`
-installs small bitmap-drawable wrappers for both the colour and monochrome
-layers; the latter is tinted by Android instead of baking in a theme colour.
+The adaptive foreground is 432 px in `drawable-xxxhdpi`, which maps to the
+108 dp launcher canvas. Its transparent padding keeps the fox-R inside the
+adaptive safe zone while Android supplies the existing release background and
+applies the user's circle, squircle or other launcher mask.
+`scripts/patch_firefox.py` intentionally removes the default icon's
+`monochrome` reference: flattening this mark to one colour made the fox detail
+disappear and left what looked like a black `R`. RFirefox therefore keeps the
+full-colour foreground even when the launcher offers themed icons.
 
 Firefox and its logo are trademarks of Mozilla Foundation. See `NOTICE.md` and
 Mozilla's trademark policy before distributing the modified assets.

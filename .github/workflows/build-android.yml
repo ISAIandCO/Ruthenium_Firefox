@@ -58,13 +58,26 @@ jobs:
           fi
 
   build:
-    name: Build debug-signed RFirefox ${{ needs.resolve.outputs.version }}
+    name: Build RFirefox ${{ needs.resolve.outputs.version }} (${{ matrix.abi }})
     needs: resolve
-    if: needs.resolve.outputs.release_exists != 'true'
+    # Scheduled checks skip versions that are already published. A manual run
+    # intentionally rebuilds the current version so broken release assets can
+    # be replaced after a CI fix.
+    if: needs.resolve.outputs.release_exists != 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            target: aarch64-linux-android
+          - abi: armeabi-v7a
+            target: arm-linux-androideabi
+          - abi: x86_64
+            target: x86_64-linux-android
     env:
-      MOZ_OBJDIR_NAME: obj-ruthenium
+      MOZ_OBJDIR_NAME: obj-ruthenium-${{ matrix.abi }}
       RFIREFOX_DEBUG_CERT_SHA256: d7a19050129bbb6e7af6f29dc899a123757ca226ea0ee3c7395c43527592035f
     steps:
       - uses: actions/checkout@v4
@@ -113,8 +126,9 @@ jobs:
             ~/.mozbuild
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: firefox-android-${{ runner.os }}-${{ needs.resolve.outputs.revision }}
+          key: firefox-android-${{ runner.os }}-${{ needs.resolve.outputs.revision }}-${{ matrix.abi }}
           restore-keys: |
+            firefox-android-${{ runner.os }}-${{ needs.resolve.outputs.revision }}-
             firefox-android-${{ runner.os }}-
 
       - name: Download the exact stable source archive
@@ -144,22 +158,31 @@ jobs:
         working-directory: ${{ runner.temp }}/firefox-source
         env:
           RFIREFOX_BOOTSTRAP_HEARTBEAT_SECONDS: "60"
+          RFIREFOX_TARGET: ${{ matrix.target }}
         run: |
           bash "$GITHUB_WORKSPACE/scripts/run_bootstrap_with_heartbeat.sh"
           test -f "$MOZCONFIG"
+          # Bootstrap follows the x86_64 runner architecture. Replace that
+          # generated target so this matrix leg compiles Gecko for its APK ABI.
+          sed -i -E \
+            '/^[[:space:]]*ac_add_options[[:space:]]+--target=/d' \
+            "$MOZCONFIG"
           {
             echo "mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/$MOZ_OBJDIR_NAME"
+            echo "ac_add_options --target=$RFIREFOX_TARGET"
             echo "ac_add_options --enable-release"
             echo "ac_add_options --disable-debug"
             echo "ac_add_options --disable-debug-symbols"
             echo "ac_add_options --enable-optimize"
           } >> "$MOZCONFIG"
+          test "$(grep -Ec '^[[:space:]]*ac_add_options[[:space:]]+--target=' "$MOZCONFIG")" -eq 1
+          grep -F "ac_add_options --target=$RFIREFOX_TARGET" "$MOZCONFIG"
 
       - name: Upload bootstrap diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: bootstrap-diagnostics-${{ needs.resolve.outputs.version }}-${{ github.run_id }}
+          name: bootstrap-diagnostics-${{ matrix.abi }}-${{ needs.resolve.outputs.version }}-${{ github.run_id }}
           path: ${{ runner.temp }}/rfirefox-bootstrap/
           if-no-files-found: warn
           retention-days: 7
@@ -187,15 +210,13 @@ jobs:
           GRADLE_INVOKED_WITHIN_MACH_BUILD: "1"
         run: ./mach gradle --no-daemon --max-workers=2 fenix:assembleRelease
 
-      - name: Collect and verify debug-signed APKs
+      - name: Collect and verify the ${{ matrix.abi }} APK
         env:
-          FIREFOX_VERSION: ${{ needs.resolve.outputs.version }}
-          FIREFOX_REVISION: ${{ needs.resolve.outputs.revision }}
-          FIREFOX_TAG: ${{ needs.resolve.outputs.tag }}
           RELEASE_TAG: ${{ needs.resolve.outputs.release_tag }}
+          TARGET_ABI: ${{ matrix.abi }}
         run: |
           output_dir="$FIREFOX_SOURCE_DIR/$MOZ_OBJDIR_NAME/gradle/build/mobile/android/fenix/app/outputs/apk/release"
-          artifact_dir="$GITHUB_WORKSPACE/artifacts"
+          artifact_dir="$GITHUB_WORKSPACE/artifacts-$TARGET_ABI"
           mkdir -p "$artifact_dir"
 
           apksigner="$(find ~/.mozbuild -type f -name apksigner -print | sort -V | tail -n 1)"
@@ -203,52 +224,117 @@ jobs:
           test -x "$apksigner"
           test -x "$aapt2"
 
-          mapfile -t source_apks < <(find "$output_dir" -type f -name '*.apk' -print | sort)
-          test "${#source_apks[@]}" -gt 0
+          mapfile -t source_apks < <(
+            find "$output_dir" -type f -name "*-$TARGET_ABI-release.apk" -print | sort
+          )
+          if [[ "${#source_apks[@]}" -ne 1 ]]; then
+            echo "::error title=Unexpected APK outputs::Expected one $TARGET_ABI release APK, found ${#source_apks[@]}."
+            printf '%s\n' "${source_apks[@]}"
+            exit 1
+          fi
 
-          for source_apk in "${source_apks[@]}"; do
-            upstream_name="$(basename "$source_apk" .apk)"
-            release_name="RFirefox-$RELEASE_TAG-$upstream_name.apk"
-            release_apk="$artifact_dir/$release_name"
+          source_apk="${source_apks[0]}"
+          upstream_name="$(basename "$source_apk" .apk)"
+          release_name="RFirefox-$RELEASE_TAG-$upstream_name.apk"
+          release_apk="$artifact_dir/$release_name"
+          cp -- "$source_apk" "$release_apk"
 
-            cp -- "$source_apk" "$release_apk"
-            signer_info="$("$apksigner" verify --verbose --print-certs "$release_apk")"
-            printf '%s\n' "$signer_info"
-            signer_sha256="$(
-              printf '%s\n' "$signer_info" |
-                python3 "$GITHUB_WORKSPACE/scripts/parse_apksigner_output.py"
-            )"
-            if [[ "$signer_sha256" != "$RFIREFOX_DEBUG_CERT_SHA256" ]]; then
-              echo "::error title=Unexpected APK signing certificate::Expected $RFIREFOX_DEBUG_CERT_SHA256, got $signer_sha256."
-              exit 1
-            fi
+          # This is the regression guard that the previous workflow lacked:
+          # the ABI split must contain a real Gecko engine for the same ABI.
+          python3 "$GITHUB_WORKSPACE/scripts/verify_android_apk.py" \
+            --apk "$release_apk" \
+            --abi "$TARGET_ABI"
 
-            if ! badging="$("$aapt2" dump badging "$release_apk")"; then
-              printf '%s\n' "$badging"
-              echo "::error title=Could not inspect APK metadata::aapt2 dump badging failed for $release_name."
-              exit 1
-            fi
-            printf '%s\n' "$badging" | sed -n \
-              -e '/^package:/p' \
-              -e '/^application-label:/p'
-            if ! grep -Fq "package: name='app.ruthenium.firefox'" <<< "$badging"; then
-              echo "::error title=Unexpected APK application ID::Expected app.ruthenium.firefox."
-              exit 1
-            fi
-            if ! grep -Fq "application-label:'RFirefox'" <<< "$badging"; then
-              echo "::error title=Unexpected APK label::Expected RFirefox."
-              exit 1
-            fi
-            (cd "$artifact_dir" && sha256sum "$release_name") > "$release_apk.sha256"
+          signer_info="$("$apksigner" verify --verbose --print-certs "$release_apk")"
+          printf '%s\n' "$signer_info"
+          signer_sha256="$(
+            printf '%s\n' "$signer_info" |
+              python3 "$GITHUB_WORKSPACE/scripts/parse_apksigner_output.py"
+          )"
+          if [[ "$signer_sha256" != "$RFIREFOX_DEBUG_CERT_SHA256" ]]; then
+            echo "::error title=Unexpected APK signing certificate::Expected $RFIREFOX_DEBUG_CERT_SHA256, got $signer_sha256."
+            exit 1
+          fi
+
+          if ! badging="$("$aapt2" dump badging "$release_apk")"; then
+            printf '%s\n' "$badging"
+            echo "::error title=Could not inspect APK metadata::aapt2 dump badging failed for $release_name."
+            exit 1
+          fi
+          printf '%s\n' "$badging" | sed -n \
+            -e '/^package:/p' \
+            -e '/^application-label:/p' \
+            -e '/^native-code:/p'
+          if ! grep -Fq "package: name='app.ruthenium.firefox'" <<< "$badging"; then
+            echo "::error title=Unexpected APK application ID::Expected app.ruthenium.firefox."
+            exit 1
+          fi
+          if ! grep -Fq "application-label:'RFirefox'" <<< "$badging"; then
+            echo "::error title=Unexpected APK label::Expected RFirefox."
+            exit 1
+          fi
+          if ! grep -Fq "native-code: '$TARGET_ABI'" <<< "$badging"; then
+            echo "::error title=Unexpected APK native code::Expected only $TARGET_ABI."
+            exit 1
+          fi
+          (cd "$artifact_dir" && sha256sum "$release_name") > "$release_apk.sha256"
+
+      - name: Upload the ${{ matrix.abi }} APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rfirefox-apk-${{ matrix.abi }}
+          path: artifacts-${{ matrix.abi }}/
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Verify and publish RFirefox ${{ needs.resolve.outputs.version }}
+    needs: [resolve, build]
+    if: ${{ always() && needs.resolve.result == 'success' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all ABI APKs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: rfirefox-apk-*
+          path: artifacts/
+          merge-multiple: true
+
+      - name: Verify the complete ABI set
+        run: |
+          mapfile -t apks < <(find artifacts -maxdepth 1 -type f -name '*.apk' -print | sort)
+          if [[ "${#apks[@]}" -ne 3 ]]; then
+            echo "::error title=Incomplete RFirefox release::Expected three ABI APKs, found ${#apks[@]}."
+            printf '%s\n' "${apks[@]}"
+            exit 1
+          fi
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            mapfile -t abi_apks < <(find artifacts -maxdepth 1 -type f -name "*-$abi-release.apk" -print)
+            test "${#abi_apks[@]}" -eq 1
+            python3 scripts/verify_android_apk.py --apk "${abi_apks[0]}" --abi "$abi"
+            (cd artifacts && sha256sum --check "$(basename "${abi_apks[0]}").sha256")
           done
 
-          cat > "$artifact_dir/build-info.txt" <<EOF
+      - name: Write release metadata
+        env:
+          FIREFOX_VERSION: ${{ needs.resolve.outputs.version }}
+          FIREFOX_REVISION: ${{ needs.resolve.outputs.revision }}
+          FIREFOX_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.release_tag }}
+          RFIREFOX_DEBUG_CERT_SHA256: d7a19050129bbb6e7af6f29dc899a123757ca226ea0ee3c7395c43527592035f
+        run: |
+          cat > artifacts/build-info.txt <<EOF
           Product: RFirefox
           Firefox version: $FIREFOX_VERSION
           Firefox Android tag: $FIREFOX_TAG
           Mozilla revision: $FIREFOX_REVISION
           Release tag: $RELEASE_TAG
           Application ID: app.ruthenium.firefox
+          ABIs: arm64-v8a,armeabi-v7a,x86_64
+          Gecko native libraries: built and verified separately for every ABI
           Signing: public repository Android debug key
           Signing certificate SHA-256: $RFIREFOX_DEBUG_CERT_SHA256
           Scoped CA DNS names: .ru,.xn--p1ai,.su
@@ -259,35 +345,54 @@ jobs:
           {
             echo "RFirefox $RELEASE_TAG"
             echo
-            echo "Debug-signed installable APK built from Mozilla tag \`$FIREFOX_TAG\`."
+            echo "Debug-signed installable APKs built from Mozilla tag $FIREFOX_TAG."
             echo
-            echo "- Mozilla revision: \`$FIREFOX_REVISION\`"
-            echo "- Android application ID: \`app.ruthenium.firefox\`"
-            echo "- Public debug signer SHA-256: \`$RFIREFOX_DEBUG_CERT_SHA256\`"
-            echo "- Added CA scope: DNS names under \`.ru\`, \`.xn--p1ai\` and \`.su\`; IP SANs are rejected"
+            echo "- Mozilla revision: $FIREFOX_REVISION"
+            echo "- Android application ID: app.ruthenium.firefox"
+            echo "- ABIs: arm64-v8a, armeabi-v7a and x86_64"
+            echo "- Gecko native libraries are built and verified separately for every ABI"
+            echo "- Public debug signer SHA-256: $RFIREFOX_DEBUG_CERT_SHA256"
+            echo "- Added CA scope: DNS names under .ru, .xn--p1ai and .su; IP SANs are rejected"
             echo
             echo "Warning: the debug private key is public and does not authenticate the publisher."
             echo
-            echo "Verify each APK with the adjacent \`.sha256\` file before installation."
-          } > "$artifact_dir/release-notes.md"
+            echo "Verify each APK with the adjacent .sha256 file before installation."
+          } > artifacts/release-notes.md
 
       - name: Upload debug-signed build artifact
         uses: actions/upload-artifact@v4
         with:
           name: RFirefox-${{ needs.resolve.outputs.release_tag }}
-          path: artifacts/
+          path: |
+            artifacts/*.apk
+            artifacts/*.apk.sha256
+            artifacts/build-info.txt
+            artifacts/release-notes.md
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish GitHub Release
+      - name: Publish or replace GitHub Release
         env:
+          RELEASE_EXISTS: ${{ needs.resolve.outputs.release_exists }}
           RELEASE_TAG: ${{ needs.resolve.outputs.release_tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$RELEASE_TAG" \
-            artifacts/*.apk \
-            artifacts/*.apk.sha256 \
-            artifacts/build-info.txt \
-            --target "$GITHUB_SHA" \
-            --title "$RELEASE_TAG" \
-            --notes-file artifacts/release-notes.md
+          if [[ "$RELEASE_EXISTS" == "true" ]]; then
+            gh release edit "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_TAG" \
+              --notes-file artifacts/release-notes.md
+            gh release upload "$RELEASE_TAG" \
+              artifacts/*.apk \
+              artifacts/*.apk.sha256 \
+              artifacts/build-info.txt \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              artifacts/*.apk \
+              artifacts/*.apk.sha256 \
+              artifacts/build-info.txt \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_TAG" \
+              --notes-file artifacts/release-notes.md
+          fi
