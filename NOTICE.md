@@ -19,4 +19,4 @@ expected DER SHA-256 fingerprint and official distribution URLs are recorded in
 
 The Android debug keystore in `signing/` is intentionally public. It provides
 signature continuity only and does not authenticate the publisher: anyone can
-use its private key to produce an APK accepted as an Rufox debug update.
+use its private key to produce an APK accepted as a Rufox debug update.
