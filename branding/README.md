@@ -1,6 +1,6 @@
-# RFirefox Android branding
+# Rufox Android branding
 
-The RFirefox mark is a custom fox whose body and tail form the outline of an
+The Rufox mark is a custom fox whose body and tail form the outline of an
 `R`. Orange, gold and magenta surfaces retain the visual language of Firefox,
 while the violet centre and dark ink background keep the result distinct and
 legible at launcher size. The letter is part of the illustration rather than a
@@ -25,7 +25,7 @@ adaptive safe zone while Android supplies the existing release background and
 applies the user's circle, squircle or other launcher mask.
 `scripts/patch_firefox.py` intentionally removes the default icon's
 `monochrome` reference: flattening this mark to one colour made the fox detail
-disappear and left what looked like a black `R`. RFirefox therefore keeps the
+disappear and left what looked like a black `R`. Rufox therefore keeps the
 full-colour foreground even when the launcher offers themed icons.
 
 Firefox and its logo are trademarks of Mozilla Foundation. See `NOTICE.md` and

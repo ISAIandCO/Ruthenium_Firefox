@@ -20,6 +20,7 @@ MINIMUM_XUL_SIZE = 32 * 1024 * 1024
 ABI_ELF_IDENTITIES = {
     "armeabi-v7a": (1, 40, "ELF32/ARM"),
     "arm64-v8a": (2, 183, "ELF64/AArch64"),
+    "x86": (1, 3, "ELF32/x86"),
     "x86_64": (2, 62, "ELF64/x86-64"),
 }
 

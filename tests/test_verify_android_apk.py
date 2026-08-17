@@ -47,12 +47,17 @@ class AndroidApkValidationTest(unittest.TestCase):
             if extra_abi:
                 archive.writestr(f"lib/{extra_abi}/libextra.so", b"native")
 
-    def test_accepts_matching_complete_gecko_split(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            apk = Path(directory) / "app.apk"
-            self.write_apk(apk, "arm64-v8a")
-            result = validate_apk(apk, "arm64-v8a", minimum_xul_size=0)
-            self.assertEqual(result["elf"], "ELF64/AArch64")
+    def test_accepts_matching_complete_gecko_splits(self) -> None:
+        for abi, expected_elf in (
+            ("arm64-v8a", "ELF64/AArch64"),
+            ("armeabi-v7a", "ELF32/ARM"),
+            ("x86", "ELF32/x86"),
+        ):
+            with self.subTest(abi=abi), tempfile.TemporaryDirectory() as directory:
+                apk = Path(directory) / "app.apk"
+                self.write_apk(apk, abi)
+                result = validate_apk(apk, abi, minimum_xul_size=0)
+                self.assertEqual(result["elf"], expected_elf)
 
     def test_rejects_missing_gecko_library(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

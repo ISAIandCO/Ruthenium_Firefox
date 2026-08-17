@@ -120,7 +120,7 @@ Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
 </resources>
 """
         patched = patch_firefox.patch_fenix_strings(strings)
-        self.assertIn(">RFirefox</string>", patched)
+        self.assertIn(">Rufox</string>", patched)
         self.assertEqual(patched, patch_firefox.patch_fenix_strings(patched))
 
         release_strings = (
@@ -130,7 +130,7 @@ Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
         patched_release = patch_firefox.patch_fenix_release_strings(
             release_strings
         )
-        self.assertIn(">RFirefox</string>", patched_release)
+        self.assertIn(">Rufox</string>", patched_release)
         self.assertEqual(
             patched_release,
             patch_firefox.patch_fenix_release_strings(patched_release),
@@ -170,7 +170,12 @@ Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
         self.assertIn("RFIREFOX_DEBUG_KEYSTORE", patched)
         self.assertIn('signingConfigs.debug.keyAlias = "androiddebugkey"', patched)
         self.assertIn('applicationId "app.ruthenium"', patched)
-        self.assertIn("RFirefox currently publishes only the 64-bit ARM APK", patched)
+        self.assertIn('System.getenv("RFIREFOX_TARGET_ABI")', patched)
+        self.assertIn(
+            '["armeabi-v7a", "arm64-v8a", "x86"]',
+            patched,
+        )
+        self.assertIn("include rfirefoxTargetAbi", patched)
         self.assertNotIn(
             'include "armeabi-v7a", "arm64-v8a", "x86_64"', patched
         )
@@ -184,7 +189,7 @@ Result NSSCertDBTrustDomain::FindIssuer(Input encodedIssuerName,
         patched = patch_firefox.patch_fenix_launcher_foreground(upstream)
         self.assertEqual(patched, patch_firefox.RFIREFOX_ADAPTIVE_FOREGROUND)
         self.assertNotIn('android:pathData="M0,0"', patched)
-        self.assertIn("RFirefox adaptive fox-R foreground", patched)
+        self.assertIn("Rufox adaptive fox-R foreground", patched)
         self.assertIn(
             'android:src="@drawable/rfirefox_launcher_foreground"', patched
         )

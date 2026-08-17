@@ -1,11 +1,11 @@
-name: Build and release RFirefox for Android
+name: Build and release Rufox for Android
 
 on:
   workflow_dispatch:
   schedule:
-    # GitHub cron uses UTC. One check/build per month; a release that already
-    # exists for the current Firefox version is skipped before the large build.
-    - cron: "17 3 15 * *"
+    # GitHub cron uses UTC. Check on five fixed dates each month; a release
+    # that already exists for the current Firefox version is skipped before the large build.
+    - cron: "17 3 1,7,14,21,28 * *"
 
 permissions:
   contents: write
@@ -58,19 +58,30 @@ jobs:
           fi
 
   build:
-    name: Build RFirefox ${{ needs.resolve.outputs.version }} (arm64-v8a)
+    name: Build Rufox ${{ needs.resolve.outputs.version }} (${{ matrix.abi }})
     needs: resolve
     # Scheduled checks skip versions that are already published. A manual run
     # intentionally rebuilds the current version so broken release assets can
     # be replaced after a CI fix.
     if: needs.resolve.outputs.release_exists != 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            target: aarch64-linux-android
+          - abi: armeabi-v7a
+            target: arm-linux-androideabi
+          - abi: x86
+            target: i686-linux-android
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
-      MOZ_OBJDIR_NAME: obj-ruthenium-arm64-v8a
+      MOZ_OBJDIR_NAME: obj-ruthenium-${{ matrix.abi }}
       RFIREFOX_DEBUG_CERT_SHA256: d7a19050129bbb6e7af6f29dc899a123757ca226ea0ee3c7395c43527592035f
-      RFIREFOX_TARGET: aarch64-linux-android
-      TARGET_ABI: arm64-v8a
+      RFIREFOX_TARGET: ${{ matrix.target }}
+      RFIREFOX_TARGET_ABI: ${{ matrix.abi }}
+      TARGET_ABI: ${{ matrix.abi }}
     steps:
       - uses: actions/checkout@v4
 
@@ -118,9 +129,9 @@ jobs:
             ~/.mozbuild
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: firefox-android-arm64-v2-${{ runner.os }}-${{ needs.resolve.outputs.revision }}
+          key: firefox-android-${{ matrix.abi }}-v3-${{ runner.os }}-${{ needs.resolve.outputs.revision }}
           restore-keys: |
-            firefox-android-arm64-v2-${{ runner.os }}-
+            firefox-android-${{ matrix.abi }}-v3-${{ runner.os }}-
 
       - name: Download the exact stable source archive
         env:
@@ -161,7 +172,7 @@ jobs:
           bash "$GITHUB_WORKSPACE/scripts/run_bootstrap_with_heartbeat.sh"
           test -f "$MOZCONFIG"
           # Bootstrap follows the x86_64 runner architecture. Replace that
-          # generated target so Gecko is compiled for the arm64 APK ABI.
+          # generated target so Gecko is compiled for this matrix job's APK ABI.
           sed -i -E \
             '/^[[:space:]]*ac_add_options[[:space:]]+--target=/d' \
             "$MOZCONFIG"
@@ -180,7 +191,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: bootstrap-diagnostics-arm64-v8a-${{ needs.resolve.outputs.version }}-${{ github.run_id }}
+          name: bootstrap-diagnostics-${{ matrix.abi }}-${{ needs.resolve.outputs.version }}-${{ github.run_id }}
           path: ${{ runner.temp }}/rfirefox-bootstrap/
           if-no-files-found: warn
           retention-days: 7
@@ -198,7 +209,7 @@ jobs:
 
       - name: Assemble Fenix release APK with the debug key
         working-directory: ${{ runner.temp }}/firefox-source
-        # The RFirefox product patch points signingConfigs.debug to the
+        # The Rufox product patch points signingConfigs.debug to the
         # RFIREFOX_DEBUG_KEYSTORE file committed in this repository.
         # A full mach build has just refreshed and staged Gecko. Tell Mozilla's
         # Gradle plugin not to start a nested `mach build faster`, which would
@@ -208,7 +219,7 @@ jobs:
           GRADLE_INVOKED_WITHIN_MACH_BUILD: "1"
         run: ./mach gradle --no-daemon --max-workers=2 fenix:assembleRelease
 
-      - name: Collect and verify the arm64-v8a APK
+      - name: Collect and verify the ${{ matrix.abi }} APK
         env:
           RELEASE_TAG: ${{ needs.resolve.outputs.release_tag }}
         run: |
@@ -232,7 +243,7 @@ jobs:
 
           source_apk="${source_apks[0]}"
           upstream_name="$(basename "$source_apk" .apk)"
-          release_name="RFirefox-$RELEASE_TAG-$upstream_name.apk"
+          release_name="Rufox-$RELEASE_TAG-$upstream_name.apk"
           release_apk="$artifact_dir/$release_name"
           cp -- "$source_apk" "$release_apk"
 
@@ -266,8 +277,8 @@ jobs:
             echo "::error title=Unexpected APK application ID::Expected app.ruthenium.firefox."
             exit 1
           fi
-          if ! grep -Fq "application-label:'RFirefox'" <<< "$badging"; then
-            echo "::error title=Unexpected APK label::Expected RFirefox."
+          if ! grep -Fq "application-label:'Rufox'" <<< "$badging"; then
+            echo "::error title=Unexpected APK label::Expected Rufox."
             exit 1
           fi
           if ! grep -Fq "native-code: '$TARGET_ABI'" <<< "$badging"; then
@@ -276,16 +287,16 @@ jobs:
           fi
           (cd "$artifact_dir" && sha256sum "$release_name") > "$release_apk.sha256"
 
-      - name: Upload the arm64-v8a APK
+      - name: Upload the ${{ matrix.abi }} APK
         uses: actions/upload-artifact@v4
         with:
-          name: rfirefox-apk-arm64-v8a
-          path: artifacts-arm64-v8a/
+          name: rufox-apk-${{ matrix.abi }}
+          path: artifacts-${{ matrix.abi }}/
           if-no-files-found: error
           retention-days: 2
 
   publish:
-    name: Verify and publish RFirefox ${{ needs.resolve.outputs.version }}
+    name: Verify and publish Rufox ${{ needs.resolve.outputs.version }}
     needs: [resolve, build]
     if: ${{ always() && needs.resolve.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
@@ -293,30 +304,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download the arm64-v8a APK
+      - name: Download all ABI APKs
         uses: actions/download-artifact@v4
         with:
-          name: rfirefox-apk-arm64-v8a
+          pattern: rufox-apk-*
           path: artifacts/
+          merge-multiple: true
 
-      - name: Verify the arm64-v8a release APK
+      - name: Verify all release APKs
         run: |
+          expected_abis=(arm64-v8a armeabi-v7a x86)
           mapfile -t apks < <(find artifacts -maxdepth 1 -type f -name '*.apk' -print | sort)
-          if [[ "${#apks[@]}" -ne 1 ]]; then
-            echo "::error title=Incomplete RFirefox release::Expected one arm64-v8a APK, found ${#apks[@]}."
+          if [[ "${#apks[@]}" -ne "${#expected_abis[@]}" ]]; then
+            echo "::error title=Incomplete Rufox release::Expected ${#expected_abis[@]} APKs, found ${#apks[@]}."
             printf '%s\n' "${apks[@]}"
             exit 1
           fi
-          release_apk="${apks[0]}"
-          case "$(basename "$release_apk")" in
-            *-arm64-v8a-release.apk) ;;
-            *)
-              echo "::error title=Unexpected RFirefox release::Expected an arm64-v8a APK."
+
+          for abi in "${expected_abis[@]}"; do
+            mapfile -t abi_apks < <(
+              find artifacts -maxdepth 1 -type f -name "*-$abi-release.apk" -print | sort
+            )
+            if [[ "${#abi_apks[@]}" -ne 1 ]]; then
+              echo "::error title=Unexpected Rufox release::Expected one $abi APK, found ${#abi_apks[@]}."
+              printf '%s\n' "${abi_apks[@]}"
               exit 1
-              ;;
-          esac
-          python3 scripts/verify_android_apk.py --apk "$release_apk" --abi arm64-v8a
-          (cd artifacts && sha256sum --check "$(basename "$release_apk").sha256")
+            fi
+            release_apk="${abi_apks[0]}"
+            python3 scripts/verify_android_apk.py --apk "$release_apk" --abi "$abi"
+            (cd artifacts && sha256sum --check "$(basename "$release_apk").sha256")
+          done
 
       - name: Write release metadata
         env:
@@ -327,14 +344,14 @@ jobs:
           RFIREFOX_DEBUG_CERT_SHA256: d7a19050129bbb6e7af6f29dc899a123757ca226ea0ee3c7395c43527592035f
         run: |
           cat > artifacts/build-info.txt <<EOF
-          Product: RFirefox
+          Product: Rufox
           Firefox version: $FIREFOX_VERSION
           Firefox Android tag: $FIREFOX_TAG
           Mozilla revision: $FIREFOX_REVISION
           Release tag: $RELEASE_TAG
           Application ID: app.ruthenium.firefox
-          ABI: arm64-v8a
-          Gecko native libraries: built and verified for arm64-v8a
+          ABIs: arm64-v8a, armeabi-v7a, x86
+          Gecko native libraries: independently built and verified for every ABI
           Signing: public repository Android debug key
           Signing certificate SHA-256: $RFIREFOX_DEBUG_CERT_SHA256
           Scoped CA DNS names: .ru,.xn--p1ai,.su
@@ -343,14 +360,14 @@ jobs:
           EOF
 
           {
-            echo "RFirefox $RELEASE_TAG"
+            echo "Rufox $RELEASE_TAG"
             echo
-            echo "Debug-signed installable arm64-v8a APK built from Mozilla tag $FIREFOX_TAG."
+            echo "Three debug-signed installable APKs built from Mozilla tag $FIREFOX_TAG."
             echo
             echo "- Mozilla revision: $FIREFOX_REVISION"
             echo "- Android application ID: app.ruthenium.firefox"
-            echo "- ABI: arm64-v8a"
-            echo "- Gecko native libraries are built and verified for arm64-v8a"
+            echo "- ABIs: arm64-v8a, armeabi-v7a, x86"
+            echo "- Gecko native libraries are independently built and verified for every ABI"
             echo "- Public debug signer SHA-256: $RFIREFOX_DEBUG_CERT_SHA256"
             echo "- Added CA scope: DNS names under .ru, .xn--p1ai and .su; IP SANs are rejected"
             echo
@@ -362,7 +379,7 @@ jobs:
       - name: Upload debug-signed build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RFirefox-${{ needs.resolve.outputs.release_tag }}
+          name: Rufox-${{ needs.resolve.outputs.release_tag }}
           path: |
             artifacts/*.apk
             artifacts/*.apk.sha256
