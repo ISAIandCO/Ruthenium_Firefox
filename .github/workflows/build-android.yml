@@ -215,16 +215,30 @@ jobs:
             signer_info="$("$apksigner" verify --verbose --print-certs "$release_apk")"
             printf '%s\n' "$signer_info"
             signer_sha256="$(
-              sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<< "$signer_info" |
-                head -n 1 |
-                tr -d ':' |
-                tr '[:upper:]' '[:lower:]'
+              printf '%s\n' "$signer_info" |
+                python3 "$GITHUB_WORKSPACE/scripts/parse_apksigner_output.py"
             )"
-            test "$signer_sha256" = "$RFIREFOX_DEBUG_CERT_SHA256"
+            if [[ "$signer_sha256" != "$RFIREFOX_DEBUG_CERT_SHA256" ]]; then
+              echo "::error title=Unexpected APK signing certificate::Expected $RFIREFOX_DEBUG_CERT_SHA256, got $signer_sha256."
+              exit 1
+            fi
 
-            badging="$($aapt2 dump badging "$release_apk")"
-            grep -F "package: name='app.ruthenium.firefox'" <<< "$badging"
-            grep -F "application-label:'RFirefox'" <<< "$badging"
+            if ! badging="$("$aapt2" dump badging "$release_apk")"; then
+              printf '%s\n' "$badging"
+              echo "::error title=Could not inspect APK metadata::aapt2 dump badging failed for $release_name."
+              exit 1
+            fi
+            printf '%s\n' "$badging" | sed -n \
+              -e '/^package:/p' \
+              -e '/^application-label:/p'
+            if ! grep -Fq "package: name='app.ruthenium.firefox'" <<< "$badging"; then
+              echo "::error title=Unexpected APK application ID::Expected app.ruthenium.firefox."
+              exit 1
+            fi
+            if ! grep -Fq "application-label:'RFirefox'" <<< "$badging"; then
+              echo "::error title=Unexpected APK label::Expected RFirefox."
+              exit 1
+            fi
             (cd "$artifact_dir" && sha256sum "$release_name") > "$release_apk.sha256"
           done
 
