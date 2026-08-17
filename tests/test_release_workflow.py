@@ -37,7 +37,43 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
 
     def test_existing_firefox_release_skips_the_expensive_build(self) -> None:
         self.assertIn("release_exists:", self.workflow)
-        self.assertIn("needs.resolve.outputs.release_exists != 'true'", self.workflow)
+        self.assertIn(
+            "needs.resolve.outputs.release_exists != 'true' || "
+            "github.event_name == 'workflow_dispatch'",
+            self.workflow,
+        )
+        self.assertIn('RELEASE_EXISTS: ${{ needs.resolve.outputs.release_exists }}', self.workflow)
+        self.assertIn('gh release upload "$RELEASE_TAG"', self.workflow)
+        self.assertIn("--clobber", self.workflow)
+
+    def test_gecko_is_built_separately_for_every_apk_abi(self) -> None:
+        for abi, target in (
+            ("arm64-v8a", "aarch64-linux-android"),
+            ("armeabi-v7a", "arm-linux-androideabi"),
+            ("x86_64", "x86_64-linux-android"),
+        ):
+            self.assertIn(f"- abi: {abi}", self.workflow)
+            self.assertIn(f"target: {target}", self.workflow)
+        self.assertIn("fail-fast: false", self.workflow)
+        self.assertIn("obj-ruthenium-${{ matrix.abi }}", self.workflow)
+        self.assertIn("ac_add_options --target=$RFIREFOX_TARGET", self.workflow)
+        self.assertIn(
+            "'/^[[:space:]]*ac_add_options[[:space:]]+--target=/d'",
+            self.workflow,
+        )
+
+    def test_each_apk_must_contain_matching_gecko_libraries(self) -> None:
+        self.assertIn("scripts/verify_android_apk.py", self.workflow)
+        self.assertIn('--abi "$TARGET_ABI"', self.workflow)
+        self.assertIn('native-code: \'$TARGET_ABI\'', self.workflow)
+        self.assertIn('name: rfirefox-apk-${{ matrix.abi }}', self.workflow)
+
+    def test_release_is_published_only_after_all_abis_pass(self) -> None:
+        self.assertIn("needs: [resolve, build]", self.workflow)
+        self.assertIn("needs.build.result == 'success'", self.workflow)
+        self.assertIn("pattern: rfirefox-apk-*", self.workflow)
+        self.assertIn('if [[ "${#apks[@]}" -ne 3 ]]', self.workflow)
+        self.assertIn("for abi in arm64-v8a armeabi-v7a x86_64", self.workflow)
 
     def test_bootstrap_has_live_diagnostics_without_an_extra_timeout(self) -> None:
         bootstrap_script = BOOTSTRAP_SCRIPT.read_text(encoding="utf-8")
