@@ -161,14 +161,15 @@ jobs:
         env:
           RFIREFOX_BOOTSTRAP_HEARTBEAT_SECONDS: "60"
         run: |
-          # The restored cache can contain mozboot's already-extracted Android
-          # NDK. Mozilla invokes `unzip -q` without overwrite flags, so that
-          # stale staging directory turns a non-interactive bootstrap into an
-          # EOF failure at the "replace android-ndk-r29/README.md?" prompt.
-          # This is an ephemeral GitHub-hosted runner with a fixed home path;
-          # remove only mozboot's disposable staging area before bootstrap.
+          # Mozilla stores the downloaded NDK archive under mozboot, but unzip
+          # extracts it with ~/.mozbuild as its working directory. A restored
+          # android-ndk-r29 directory therefore triggers an interactive replace
+          # prompt and EOF even when mozboot itself was removed.
+          # Both paths are disposable on this fixed-home GitHub-hosted runner.
           test "$HOME" = "/home/runner"
-          rm -rf -- /home/runner/.mozbuild/mozboot
+          rm -rf -- \
+            /home/runner/.mozbuild/mozboot \
+            /home/runner/.mozbuild/android-ndk-r29
           bash "$GITHUB_WORKSPACE/scripts/run_bootstrap_with_heartbeat.sh"
           test -f "$MOZCONFIG"
           # Bootstrap follows the x86_64 runner architecture. Replace that
