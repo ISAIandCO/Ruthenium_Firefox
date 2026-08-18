@@ -139,8 +139,12 @@ class ReleaseWorkflowPolicyTest(unittest.TestCase):
             self.workflow,
         )
 
-    def test_bootstrap_discards_cached_mozboot_staging(self) -> None:
-        cleanup = "rm -rf -- /home/runner/.mozbuild/mozboot"
+    def test_bootstrap_discards_cached_ndk_before_bootstrap(self) -> None:
+        cleanup = (
+            "rm -rf -- \\\n"
+            "            /home/runner/.mozbuild/mozboot \\\n"
+            "            /home/runner/.mozbuild/android-ndk-r29"
+        )
         self.assertIn('test "$HOME" = "/home/runner"', self.workflow)
         self.assertIn(cleanup, self.workflow)
         self.assertLess(
